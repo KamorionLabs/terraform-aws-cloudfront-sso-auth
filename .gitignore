@@ -1,0 +1,28 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.lock.hcl
+
+# Lambda build artifacts
+lambda/dist/
+lambda/node_modules/
+lambda/package.zip
+lambda/package-lock.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Examples - local files
+examples/**/idp-metadata.xml
+examples/**/*.tfvars
+examples/**/.terraform/
+examples/**/*.tfstate*

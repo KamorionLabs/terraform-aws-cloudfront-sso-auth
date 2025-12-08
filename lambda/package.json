@@ -1,0 +1,26 @@
+{
+  "name": "cloudfront-sso-auth-lambda",
+  "version": "1.0.0",
+  "description": "Lambda@Edge functions for CloudFront SSO authentication with Identity Center",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "npm run clean && npm run compile && npm run copy-config",
+    "compile": "tsc",
+    "clean": "rm -rf dist",
+    "copy-config": "node scripts/inject-config.js"
+  },
+  "dependencies": {
+    "samlify": "^2.8.11"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
