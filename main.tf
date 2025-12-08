@@ -131,9 +131,9 @@ resource "null_resource" "build_lambda" {
     working_dir = "${path.module}/lambda"
 
     environment = {
-      SAML_AUDIENCE    = var.saml_audience
-      SAML_INIT_VECTOR = random_password.init_vector.result
-      SAML_PRIVATE_KEY = random_password.private_key.result
+      SAML_AUDIENCE     = var.saml_audience
+      SAML_INIT_VECTOR  = random_password.init_vector.result
+      SAML_PRIVATE_KEY  = random_password.private_key.result
       SAML_IDP_METADATA = var.idp_metadata
     }
   }

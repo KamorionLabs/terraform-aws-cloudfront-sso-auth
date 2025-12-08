@@ -9,7 +9,6 @@
 lambda/dist/
 lambda/node_modules/
 lambda/package.zip
-lambda/package-lock.json
 
 # IDE
 .idea/
