@@ -33,10 +33,12 @@ resource "aws_secretsmanager_secret_version" "saml_config" {
 
   secret_id = aws_secretsmanager_secret.saml_config.id
   secret_string = jsonencode({
-    audience     = var.saml_audience
-    init_vector  = random_password.init_vector.result
-    private_key  = random_password.private_key.result
-    idp_metadata = var.idp_metadata
+    audience            = var.saml_audience
+    init_vector         = random_password.init_vector.result
+    private_key         = random_password.private_key.result
+    idp_metadata        = var.idp_metadata
+    signing_cert        = tls_self_signed_cert.saml_signing.cert_pem
+    signing_private_key = tls_private_key.saml_signing.private_key_pem
   })
 
   lifecycle {
@@ -52,6 +54,29 @@ resource "random_password" "init_vector" {
 resource "random_password" "private_key" {
   length  = 32
   special = false
+}
+
+# -----------------------------------------------------------------------------
+# TLS Certificate for SAML Request Signing
+# -----------------------------------------------------------------------------
+resource "tls_private_key" "saml_signing" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+resource "tls_self_signed_cert" "saml_signing" {
+  private_key_pem = tls_private_key.saml_signing.private_key_pem
+
+  subject {
+    common_name  = "SAML SP Signing Certificate"
+    organization = var.name
+  }
+
+  validity_period_hours = 87600 # 10 years
+
+  allowed_uses = [
+    "digital_signature",
+  ]
 }
 
 # -----------------------------------------------------------------------------
@@ -131,10 +156,12 @@ resource "null_resource" "build_lambda" {
     working_dir = "${path.module}/lambda"
 
     environment = {
-      SAML_AUDIENCE     = var.saml_audience
-      SAML_INIT_VECTOR  = random_password.init_vector.result
-      SAML_PRIVATE_KEY  = random_password.private_key.result
-      SAML_IDP_METADATA = var.idp_metadata
+      SAML_AUDIENCE            = var.saml_audience
+      SAML_INIT_VECTOR         = random_password.init_vector.result
+      SAML_PRIVATE_KEY         = random_password.private_key.result
+      SAML_IDP_METADATA        = var.idp_metadata
+      SAML_SIGNING_CERT        = tls_self_signed_cert.saml_signing.cert_pem
+      SAML_SIGNING_PRIVATE_KEY = tls_private_key.saml_signing.private_key_pem
     }
   }
 }

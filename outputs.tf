@@ -60,6 +60,16 @@ output "secrets_manager_arn" {
 }
 
 # -----------------------------------------------------------------------------
+# SAML Signing Certificate
+# -----------------------------------------------------------------------------
+
+output "saml_signing_certificate" {
+  description = "SAML signing certificate in PEM format (for Identity Center configuration if needed)"
+  value       = tls_self_signed_cert.saml_signing.cert_pem
+  sensitive   = true
+}
+
+# -----------------------------------------------------------------------------
 # CloudFront Cache Behaviors Configuration (for reference)
 # -----------------------------------------------------------------------------
 

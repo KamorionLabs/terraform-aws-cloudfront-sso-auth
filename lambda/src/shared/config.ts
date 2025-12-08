@@ -16,6 +16,12 @@ export const secrets = {
 
   // Identity Provider SAML metadata XML
   idpMetadata: 'PLACEHOLDER_IDP_METADATA',
+
+  // SAML signing certificate (PEM format)
+  signingCert: 'PLACEHOLDER_SIGNING_CERT',
+
+  // SAML signing private key (PEM format)
+  signingPrivateKey: 'PLACEHOLDER_SIGNING_PRIVATE_KEY',
 };
 
 export const config = {
@@ -25,16 +31,35 @@ export const config = {
 };
 
 /**
+ * Extract the certificate body from PEM format (remove headers and newlines)
+ */
+function extractCertBody(pem: string): string {
+  return pem
+    .replace(/-----BEGIN CERTIFICATE-----/g, '')
+    .replace(/-----END CERTIFICATE-----/g, '')
+    .replace(/\n/g, '')
+    .trim();
+}
+
+/**
  * Build the Service Provider metadata.xml
  */
 export function spMetadata(domain: string): string {
+  const certBody = extractCertBody(secrets.signingCert);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <md:EntityDescriptor
   xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
   xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
   xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
   entityID="${secrets.audience}">
-    <md:SPSSODescriptor WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <md:SPSSODescriptor AuthnRequestsSigned="true" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+        <md:KeyDescriptor use="signing">
+            <ds:KeyInfo>
+                <ds:X509Data>
+                    <ds:X509Certificate>${certBody}</ds:X509Certificate>
+                </ds:X509Data>
+            </ds:KeyInfo>
+        </md:KeyDescriptor>
         <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
         <md:AssertionConsumerService isDefault="true" index="0" Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://${domain}${config.acsPath}"/>
     </md:SPSSODescriptor>

@@ -10,14 +10,12 @@ import {
   setSchemaValidator,
 } from 'samlify';
 import { parse as parseQueryString } from 'node:querystring';
-import { spMetadata, idpMetadata, config } from '../shared/config';
+import { spMetadata, idpMetadata, config, secrets } from '../shared/config';
 import { encrypt, isValidAudience } from '../shared/utils/crypt';
 import { getDomain } from '../shared/utils/cloudfront';
 
 const idp = identityProvider({
   metadata: idpMetadata,
-  // Override the WantAuthnRequestsSigned flag from IdP metadata
-  wantAuthnRequestsSigned: false,
 });
 
 const invalidRequest: CloudFrontRequestResult = {
@@ -87,8 +85,8 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
 
     const sp = serviceProvider({
       metadata: spMeta,
-      // Don't sign AuthnRequest - Identity Center works without it
-      authnRequestsSigned: false,
+      privateKey: secrets.signingPrivateKey,
+      authnRequestsSigned: true,
     });
     console.log('ServiceProvider created');
 

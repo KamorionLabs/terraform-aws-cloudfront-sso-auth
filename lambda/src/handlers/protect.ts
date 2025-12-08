@@ -4,14 +4,12 @@ import type {
 } from 'aws-lambda';
 
 import { ServiceProvider as serviceProvider, IdentityProvider as identityProvider } from 'samlify';
-import { spMetadata, idpMetadata, config } from '../shared/config';
+import { spMetadata, idpMetadata, config, secrets } from '../shared/config';
 import { isValidToken } from '../shared/utils/crypt';
 import { getDomain, parseCookies } from '../shared/utils/cloudfront';
 
 const idp = identityProvider({
   metadata: idpMetadata,
-  // Override the WantAuthnRequestsSigned flag from IdP metadata
-  wantAuthnRequestsSigned: false,
 });
 
 const invalidRequest: CloudFrontRequestResult = {
@@ -58,11 +56,11 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
       return;
     }
 
-    console.log('Creating SP with authnRequestsSigned=false');
+    console.log('Creating SP with signed AuthnRequest');
     const sp = serviceProvider({
       metadata: spMetadata(domain),
-      // Don't sign AuthnRequest - Identity Center works without it
-      authnRequestsSigned: false,
+      privateKey: secrets.signingPrivateKey,
+      authnRequestsSigned: true,
     });
     console.log('SP created successfully');
 
