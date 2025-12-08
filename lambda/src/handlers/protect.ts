@@ -10,6 +10,8 @@ import { getDomain, parseCookies } from '../shared/utils/cloudfront';
 
 const idp = identityProvider({
   metadata: idpMetadata,
+  // Override the WantAuthnRequestsSigned flag from IdP metadata
+  wantAuthnRequestsSigned: false,
 });
 
 const invalidRequest: CloudFrontRequestResult = {
