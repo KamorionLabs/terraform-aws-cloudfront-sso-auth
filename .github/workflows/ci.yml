@@ -53,10 +53,16 @@ jobs:
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
-      - name: Terraform Init (root module)
+      - name: Create dummy IDP metadata for validation
+        run: |
+          echo '<?xml version="1.0"?><EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="test"></EntityDescriptor>' > examples/simple/idp-metadata.xml
+
+      - name: Terraform Init (example)
+        working-directory: examples/simple
         run: terraform init -backend=false
 
-      - name: Terraform Validate (root module)
+      - name: Terraform Validate (example)
+        working-directory: examples/simple
         run: terraform validate
 
       - name: Terraform Init (identity-center-app)
