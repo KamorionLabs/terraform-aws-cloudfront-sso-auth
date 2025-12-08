@@ -4,9 +4,10 @@
   "description": "Lambda@Edge functions for CloudFront SSO authentication with Identity Center",
   "main": "dist/index.js",
   "scripts": {
-    "build": "npm run clean && npm run compile && npm run copy-config",
+    "build": "npm run clean && npm run compile && npm run copy-deps && npm run copy-config",
     "compile": "tsc",
     "clean": "rm -rf dist",
+    "copy-deps": "cp package.json package-lock.json dist/ && cd dist && npm ci --omit=dev",
     "copy-config": "node scripts/inject-config.js"
   },
   "dependencies": {
