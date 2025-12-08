@@ -85,6 +85,8 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
 
     const sp = serviceProvider({
       metadata: spMeta,
+      // Don't sign AuthnRequest - Identity Center works without it
+      authnRequestsSigned: false,
     });
     console.log('ServiceProvider created');
 

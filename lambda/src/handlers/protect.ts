@@ -52,6 +52,8 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
 
     const sp = serviceProvider({
       metadata: spMetadata(domain),
+      // Don't sign AuthnRequest - Identity Center works without it
+      authnRequestsSigned: false,
     });
 
     let accessGranted = false;
