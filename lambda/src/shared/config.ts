@@ -22,6 +22,9 @@ export const secrets = {
 
   // SAML signing private key (PEM format)
   signingPrivateKey: 'PLACEHOLDER_SIGNING_PRIVATE_KEY',
+
+  // Whether to sign SAML AuthnRequests (must match IDP WantAuthnRequestsSigned)
+  signAuthnRequests: 'PLACEHOLDER_SIGN_AUTHN_REQUESTS',
 };
 
 export const config = {
@@ -42,17 +45,22 @@ function extractCertBody(pem: string): string {
 }
 
 /**
- * Build the Service Provider metadata.xml
+ * Check if AuthnRequests should be signed
  */
+export function shouldSignAuthnRequests(): boolean {
+  return secrets.signAuthnRequests === 'true';
+}
+
 export function spMetadata(domain: string): string {
   const certBody = extractCertBody(secrets.signingCert);
+  const signRequests = shouldSignAuthnRequests();
   return `<?xml version="1.0" encoding="UTF-8"?>
 <md:EntityDescriptor
   xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
   xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
   xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
   entityID="${secrets.audience}">
-    <md:SPSSODescriptor AuthnRequestsSigned="true" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <md:SPSSODescriptor AuthnRequestsSigned="${signRequests}" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
         <md:KeyDescriptor use="signing">
             <ds:KeyInfo>
                 <ds:X509Data>
