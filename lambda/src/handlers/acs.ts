@@ -107,6 +107,7 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
         console.log('SAML parse successful');
         console.log('Audience:', parseResult.extract.audience);
         console.log('Conditions:', JSON.stringify(parseResult.extract.conditions));
+        console.log('NameID:', parseResult.extract.nameID);
 
         const expiry = new Date(parseResult.extract.conditions.notOnOrAfter).getTime();
         const now = new Date().getTime();
@@ -115,18 +116,23 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
         const audienceValid = isValidAudience(parseResult.extract.audience);
         console.log('Audience valid:', audienceValid);
 
+        // Extract user email from SAML nameID
+        const userEmail = parseResult.extract.nameID || '';
+        console.log('User email extracted:', userEmail);
+
         if (audienceValid && expiry > now) {
           // Get original URL from RelayState
           const relayState = (payloadAsObject.RelayState as string) || '/';
           console.log('RelayState for redirect:', relayState);
 
-          // Create encrypted authentication token
+          // Create encrypted authentication token (includes user email)
           const encryptedToken = encrypt({
             audience: parseResult.extract.audience,
             validUntil: expiry,
             domain,
+            userEmail,
           });
-          console.log('Encrypted token created');
+          console.log('Encrypted token created with user email');
 
           // Build cookie expiry date
           const cookieExpiry = new Date(parseResult.extract.conditions.notOnOrAfter).toUTCString();

@@ -5,7 +5,7 @@ import type {
 
 import { ServiceProvider as serviceProvider, IdentityProvider as identityProvider } from 'samlify';
 import { spMetadata, idpMetadata, config, secrets, shouldSignAuthnRequests } from '../shared/config';
-import { isValidToken } from '../shared/utils/crypt';
+import { getTokenDetails } from '../shared/utils/crypt';
 import { getDomain, parseCookies } from '../shared/utils/cloudfront';
 
 const idp = identityProvider({
@@ -66,14 +66,18 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
     console.log('SP created successfully');
 
     let accessGranted = false;
+    let userEmail: string | undefined;
 
     // Check for valid authentication cookie
     if (headers.cookie) {
       const cookies = parseCookies(headers.cookie);
       console.log('Cookie names:', Object.keys(cookies));
-      if (isValidToken(cookies[config.cookieName])) {
+      const tokenDetails = getTokenDetails(cookies[config.cookieName]);
+      if (tokenDetails) {
         console.log('Valid token found');
         accessGranted = true;
+        userEmail = tokenDetails.userEmail;
+        console.log('User email from token:', userEmail);
       } else {
         console.log('No valid token in cookies');
       }
@@ -111,8 +115,18 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
       return;
     }
 
-    // Access granted - forward request to origin
+    // Access granted - forward request to origin with user identity header
     console.log('Access granted, forwarding to origin');
+
+    // Add user email header if available (for audit/attribution)
+    if (userEmail) {
+      request.headers['x-sso-user-email'] = [{
+        key: 'X-SSO-User-Email',
+        value: userEmail,
+      }];
+      console.log('Added x-sso-user-email header:', userEmail);
+    }
+
     callback(null, request);
   } catch (error) {
     console.error('Protect handler error:', error);

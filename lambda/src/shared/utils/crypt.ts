@@ -7,6 +7,7 @@ export interface AccessDetails {
   audience: string;
   validUntil: number;
   domain: string;
+  userEmail?: string;
 }
 
 /**
@@ -57,6 +58,25 @@ export function isValidToken(token: string | undefined): boolean {
     return isValidAudience(accessObject.audience) && accessObject.validUntil > now;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Get access details from token (returns null if invalid)
+ */
+export function getTokenDetails(token: string | undefined): AccessDetails | null {
+  if (!token) {
+    return null;
+  }
+  try {
+    const accessObject = decrypt(token);
+    const now = new Date().getTime();
+    if (isValidAudience(accessObject.audience) && accessObject.validUntil > now) {
+      return accessObject;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
