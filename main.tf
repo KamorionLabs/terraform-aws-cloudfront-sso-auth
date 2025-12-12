@@ -156,13 +156,13 @@ resource "null_resource" "build_lambda" {
     working_dir = "${path.module}/lambda"
 
     environment = {
-      SAML_AUDIENCE             = var.saml_audience
-      SAML_INIT_VECTOR          = random_password.init_vector.result
-      SAML_PRIVATE_KEY          = random_password.private_key.result
-      SAML_IDP_METADATA         = var.idp_metadata
-      SAML_SIGNING_CERT         = tls_self_signed_cert.saml_signing.cert_pem
-      SAML_SIGNING_PRIVATE_KEY  = tls_private_key.saml_signing.private_key_pem
-      SAML_SIGN_AUTHN_REQUESTS  = var.sign_authn_requests ? "true" : "false"
+      SAML_AUDIENCE            = var.saml_audience
+      SAML_INIT_VECTOR         = random_password.init_vector.result
+      SAML_PRIVATE_KEY         = random_password.private_key.result
+      SAML_IDP_METADATA        = var.idp_metadata
+      SAML_SIGNING_CERT        = tls_self_signed_cert.saml_signing.cert_pem
+      SAML_SIGNING_PRIVATE_KEY = tls_private_key.saml_signing.private_key_pem
+      SAML_SIGN_AUTHN_REQUESTS = var.sign_authn_requests ? "true" : "false"
     }
   }
 }
