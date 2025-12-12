@@ -30,6 +30,7 @@ export const secrets = {
 export const config = {
   acsPath: '/saml/acs',
   metadataPath: '/saml/metadata.xml',
+  logoutPath: '/saml/logout',
   cookieName: 'sso_auth',
 };
 

@@ -48,6 +48,37 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
       return;
     }
 
+    // Handle logout - clear cookie and redirect to home
+    if (uri === config.logoutPath) {
+      console.log('Logout requested - clearing cookie');
+      const logoutResponse: CloudFrontRequestResult = {
+        status: '302',
+        statusDescription: 'Found',
+        headers: {
+          location: [
+            {
+              key: 'Location',
+              value: '/',
+            },
+          ],
+          'set-cookie': [
+            {
+              key: 'Set-Cookie',
+              value: `${config.cookieName}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax`,
+            },
+          ],
+          'cache-control': [
+            {
+              key: 'Cache-Control',
+              value: 'no-cache, no-store, must-revalidate',
+            },
+          ],
+        },
+      };
+      callback(null, logoutResponse);
+      return;
+    }
+
     const domain = getDomain(headers);
     console.log('Domain:', domain);
     if (!domain) {
