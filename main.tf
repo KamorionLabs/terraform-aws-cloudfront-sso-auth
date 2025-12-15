@@ -128,6 +128,22 @@ resource "aws_iam_role_policy" "lambda_edge" {
 # Lambda@Edge Functions
 # -----------------------------------------------------------------------------
 
+# Write SAML config to a JSON file for the build script
+# This ensures config is available even when building manually
+resource "local_file" "saml_config" {
+  filename = "${path.module}/lambda/.saml-config.json"
+  content = jsonencode({
+    audience            = var.saml_audience
+    initVector          = random_password.init_vector.result
+    privateKey          = random_password.private_key.result
+    idpMetadata         = var.idp_metadata
+    signingCert         = tls_self_signed_cert.saml_signing.cert_pem
+    signingPrivateKey   = tls_private_key.saml_signing.private_key_pem
+    signAuthnRequests   = var.sign_authn_requests ? "true" : "false"
+  })
+  file_permission = "0600"
+}
+
 # Build Lambda package
 data "archive_file" "lambda_package" {
   type        = "zip"
@@ -149,21 +165,14 @@ resource "null_resource" "build_lambda" {
       file("${path.module}/lambda/package.json"),
     ]))
     secrets_version = aws_secretsmanager_secret_version.saml_config.version_id
+    config_hash     = local_file.saml_config.content_md5
   }
+
+  depends_on = [local_file.saml_config]
 
   provisioner "local-exec" {
     command     = "npm ci && npm run build"
     working_dir = "${path.module}/lambda"
-
-    environment = {
-      SAML_AUDIENCE            = var.saml_audience
-      SAML_INIT_VECTOR         = random_password.init_vector.result
-      SAML_PRIVATE_KEY         = random_password.private_key.result
-      SAML_IDP_METADATA        = var.idp_metadata
-      SAML_SIGNING_CERT        = tls_self_signed_cert.saml_signing.cert_pem
-      SAML_SIGNING_PRIVATE_KEY = tls_private_key.saml_signing.private_key_pem
-      SAML_SIGN_AUTHN_REQUESTS = var.sign_authn_requests ? "true" : "false"
-    }
   }
 }
 
