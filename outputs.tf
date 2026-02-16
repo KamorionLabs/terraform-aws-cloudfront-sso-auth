@@ -51,6 +51,34 @@ output "saml_metadata_urls" {
 }
 
 # -----------------------------------------------------------------------------
+# SP Metadata XML (for Identity Center upload)
+# -----------------------------------------------------------------------------
+
+output "sp_metadata_xml" {
+  description = "Complete SP metadata XML with all ACS URLs, ready to upload to Identity Center SAML application configuration"
+  value       = <<-XML
+<?xml version="1.0" encoding="UTF-8"?>
+<md:EntityDescriptor
+  xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+  xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+  xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
+  entityID="${var.saml_audience}">
+    <md:SPSSODescriptor AuthnRequestsSigned="${var.sign_authn_requests}" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+        <md:KeyDescriptor use="signing">
+            <ds:KeyInfo>
+                <ds:X509Data>
+                    <ds:X509Certificate>${replace(replace(replace(tls_self_signed_cert.saml_signing.cert_pem, "-----BEGIN CERTIFICATE-----", ""), "-----END CERTIFICATE-----", ""), "\n", "")}</ds:X509Certificate>
+                </ds:X509Data>
+            </ds:KeyInfo>
+        </md:KeyDescriptor>
+        <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
+${join("\n", [for i, domain in var.cloudfront_domains : "        <md:AssertionConsumerService${i == 0 ? " isDefault=\"true\"" : ""} index=\"${i}\" Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://${domain}${local.saml_acs_path}\"/>"])}
+    </md:SPSSODescriptor>
+</md:EntityDescriptor>
+XML
+}
+
+# -----------------------------------------------------------------------------
 # Secrets
 # -----------------------------------------------------------------------------
 
