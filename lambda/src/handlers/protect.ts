@@ -118,8 +118,14 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
 
     if (!accessGranted) {
       console.log('Access not granted, creating login request');
-      // Redirect to Identity Center login
-      sp.entitySetting.relayState = uri;
+      // Preserve querystring across the SAML round-trip: in Lambda@Edge events the
+      // querystring lives on request.querystring (raw, no leading '?') separately
+      // from request.uri, so it must be concatenated explicitly into RelayState
+      // for ACS to redirect back to the original path with its params intact.
+      const querystring = request.querystring;
+      const relayStateUri = querystring ? `${uri}?${querystring}` : uri;
+      console.log('RelayState:', relayStateUri);
+      sp.entitySetting.relayState = relayStateUri;
       const { context: loginRequestUrl } = sp.createLoginRequest(idp, 'redirect');
       console.log('Login request URL created:', loginRequestUrl?.substring(0, 100));
 
