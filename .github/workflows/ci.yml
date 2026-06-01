@@ -103,6 +103,8 @@ jobs:
           SAML_INIT_VECTOR: '1234567890123456'
           SAML_PRIVATE_KEY: '12345678901234567890123456789012'
           SAML_IDP_METADATA: '<xml>test</xml>'
+          SAML_SIGNING_CERT: 'test-signing-cert'
+          SAML_SIGNING_PRIVATE_KEY: 'test-signing-private-key'
 
       - name: Check build output
         run: |

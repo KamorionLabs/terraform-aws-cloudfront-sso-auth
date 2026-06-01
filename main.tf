@@ -133,13 +133,13 @@ resource "aws_iam_role_policy" "lambda_edge" {
 resource "local_file" "saml_config" {
   filename = "${path.module}/lambda/.saml-config.json"
   content = jsonencode({
-    audience            = var.saml_audience
-    initVector          = random_password.init_vector.result
-    privateKey          = random_password.private_key.result
-    idpMetadata         = var.idp_metadata
-    signingCert         = tls_self_signed_cert.saml_signing.cert_pem
-    signingPrivateKey   = tls_private_key.saml_signing.private_key_pem
-    signAuthnRequests   = var.sign_authn_requests ? "true" : "false"
+    audience          = var.saml_audience
+    initVector        = random_password.init_vector.result
+    privateKey        = random_password.private_key.result
+    idpMetadata       = var.idp_metadata
+    signingCert       = tls_self_signed_cert.saml_signing.cert_pem
+    signingPrivateKey = tls_private_key.saml_signing.private_key_pem
+    signAuthnRequests = var.sign_authn_requests ? "true" : "false"
   })
   file_permission = "0600"
 }
