@@ -1,4 +1,5 @@
 import type {
+  CloudFrontHeaders,
   CloudFrontRequestHandler,
   CloudFrontRequestResult,
 } from 'aws-lambda';
@@ -26,6 +27,42 @@ const invalidRequest: CloudFrontRequestResult = {
     ],
   },
 };
+
+// Browser-independent fallback: file extensions that are always passive static
+// assets. Intentionally excludes .js/.json/.txt/.xml/.html so that data fetched
+// via XHR and any markup stays gated on clients that do not send Sec-Fetch
+// headers (e.g. Safari < 16.4).
+const STATIC_ASSET_EXTENSIONS =
+  /\.(?:svg|ico|png|jpe?g|gif|webp|avif|bmp|woff2?|ttf|otf|eot|css|mp4|webm|ogg|mp3|wav)$/i;
+
+/**
+ * Whether a request is a static, non-navigational sub-resource that must be
+ * served without an SSO redirect.
+ *
+ * An SSO gate must never answer an <img>, @font-face, stylesheet or media
+ * request with a 307 redirect to the Identity Center HTML portal: the browser
+ * cannot render the portal as the requested resource, so the asset silently
+ * breaks. This is the root cause of intermittent missing static assets on
+ * protected environments — sub-resources fired with an expired or absent auth
+ * cookie get redirected instead of served.
+ *
+ * Primary signal is Sec-Fetch-Dest (sent by modern browsers): anything that is
+ * neither a navigation (document/iframe/frame) nor a programmatic fetch (empty,
+ * i.e. fetch/XHR, which covers API and RSC data) is a passive sub-resource. The
+ * extension allowlist is a fallback for clients that omit Sec-Fetch headers.
+ */
+function isStaticSubresource(uri: string, headers: CloudFrontHeaders): boolean {
+  const dest = headers['sec-fetch-dest']?.[0]?.value;
+  if (dest) {
+    return (
+      dest !== 'document' &&
+      dest !== 'iframe' &&
+      dest !== 'frame' &&
+      dest !== 'empty'
+    );
+  }
+  return STATIC_ASSET_EXTENSIONS.test(uri);
+}
 
 /**
  * Protect Lambda@Edge Handler
@@ -76,6 +113,16 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
         },
       };
       callback(null, logoutResponse);
+      return;
+    }
+
+    // Skip auth for passive static sub-resources so they are never redirected
+    // to the HTML login portal. These are public assets (already public in
+    // production) with no sensitive data; navigations and XHR/API fetches stay
+    // gated. Done before the SAML SP is built to also save work on every asset.
+    if (isStaticSubresource(uri, headers)) {
+      console.log('Skipping auth for static sub-resource:', uri);
+      callback(null, request);
       return;
     }
 
