@@ -51,3 +51,14 @@ variable "sign_authn_requests" {
   type        = bool
   default     = false
 }
+
+variable "session_duration_hours" {
+  description = "Lifetime of the SSO session cookie, in hours. Decoupled from the SAML assertion's short Conditions/notOnOrAfter window so long-running flows (e.g. multi-step booking tunnels) are not re-prompted mid-session. Assertion freshness is still enforced at login time."
+  type        = number
+  default     = 8
+
+  validation {
+    condition     = var.session_duration_hours > 0 && var.session_duration_hours <= 24
+    error_message = "session_duration_hours must be between 1 and 24."
+  }
+}

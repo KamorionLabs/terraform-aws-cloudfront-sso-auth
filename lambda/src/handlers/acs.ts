@@ -109,9 +109,18 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
         console.log('Conditions:', JSON.stringify(parseResult.extract.conditions));
         console.log('NameID:', parseResult.extract.nameID);
 
-        const expiry = new Date(parseResult.extract.conditions.notOnOrAfter).getTime();
+        // Assertion freshness: the SAML Conditions/notOnOrAfter window is short
+        // (minutes) and is only used here to reject stale/replayed assertions at
+        // login time.
+        const assertionExpiry = new Date(parseResult.extract.conditions.notOnOrAfter).getTime();
         const now = new Date().getTime();
-        console.log('Expiry:', expiry, 'Now:', now, 'Valid:', expiry > now);
+        console.log('Assertion expiry:', assertionExpiry, 'Now:', now, 'Fresh:', assertionExpiry > now);
+
+        // Session lifetime is decoupled from the (short) assertion window so that
+        // long-running flows (e.g. multi-step booking tunnels) are not re-prompted
+        // for SSO mid-session.
+        const sessionExpiry = now + config.sessionDurationSeconds * 1000;
+        console.log('Session expiry:', sessionExpiry, 'Duration (s):', config.sessionDurationSeconds);
 
         const audienceValid = isValidAudience(parseResult.extract.audience);
         console.log('Audience valid:', audienceValid);
@@ -120,22 +129,23 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
         const userEmail = parseResult.extract.nameID || '';
         console.log('User email extracted:', userEmail);
 
-        if (audienceValid && expiry > now) {
+        if (audienceValid && assertionExpiry > now) {
           // Get original URL from RelayState
           const relayState = (payloadAsObject.RelayState as string) || '/';
           console.log('RelayState for redirect:', relayState);
 
-          // Create encrypted authentication token (includes user email)
+          // Create encrypted authentication token (includes user email). The
+          // token is valid for the whole session, not just the assertion window.
           const encryptedToken = encrypt({
             audience: parseResult.extract.audience,
-            validUntil: expiry,
+            validUntil: sessionExpiry,
             domain,
             userEmail,
           });
           console.log('Encrypted token created with user email');
 
-          // Build cookie expiry date
-          const cookieExpiry = new Date(parseResult.extract.conditions.notOnOrAfter).toUTCString();
+          // Cookie expiry matches the session lifetime.
+          const cookieExpiry = new Date(sessionExpiry).toUTCString();
 
           const response: CloudFrontRequestResult = {
             status: '302',
@@ -164,7 +174,7 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
           console.log('Redirecting to:', `https://${domain}${relayState}`);
           callback(null, response);
         } else {
-          console.error('Invalid audience or expired assertion. Audience valid:', audienceValid, 'Expiry valid:', expiry > now);
+          console.error('Invalid audience or expired assertion. Audience valid:', audienceValid, 'Assertion fresh:', assertionExpiry > now);
           callback(null, invalidRequest);
         }
       })

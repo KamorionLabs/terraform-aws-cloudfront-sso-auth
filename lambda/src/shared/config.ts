@@ -32,6 +32,12 @@ export const config = {
   metadataPath: '/saml/metadata.xml',
   logoutPath: '/saml/logout',
   cookieName: 'sso_auth',
+
+  // Session cookie lifetime in seconds, injected at build time by
+  // scripts/inject-config.js. Decoupled from the SAML assertion's short
+  // Conditions/notOnOrAfter window so long flows (e.g. multi-step booking
+  // tunnels) are not re-prompted mid-session. Falls back to 8h if missing.
+  sessionDurationSeconds: Number('PLACEHOLDER_SESSION_DURATION_SECONDS') || 28800,
 };
 
 /**
