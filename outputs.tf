@@ -3,8 +3,13 @@
 # -----------------------------------------------------------------------------
 
 output "lambda_protect_arn" {
-  description = "Qualified ARN of the protect Lambda@Edge function (for viewer-request on default behavior)"
+  description = "Qualified ARN of the protect Lambda@Edge function. Alternative to sso_check_function_arn for behaviors that carry no CloudFront Function (viewer-request)."
   value       = aws_lambda_function.protect.qualified_arn
+}
+
+output "lambda_login_arn" {
+  description = "Qualified ARN of the login Lambda@Edge function (for viewer-request on /saml/login, required with the sso-check CloudFront Function)"
+  value       = aws_lambda_function.login.qualified_arn
 }
 
 output "lambda_acs_arn" {
@@ -15,6 +20,26 @@ output "lambda_acs_arn" {
 output "lambda_metadata_arn" {
   description = "Qualified ARN of the metadata Lambda@Edge function (for viewer-request on /saml/metadata.xml)"
   value       = aws_lambda_function.metadata.qualified_arn
+}
+
+# -----------------------------------------------------------------------------
+# sso-check CloudFront Function
+# -----------------------------------------------------------------------------
+
+output "sso_check_function_arn" {
+  description = "ARN of the sso-check CloudFront Function (for viewer-request on every protected behavior)"
+  value       = aws_cloudfront_function.sso_check.arn
+}
+
+output "sso_check_import_js" {
+  description = "Import line the sso-check library needs. Must sit at the top of a composed function, next to its other imports."
+  value       = local.sso_check_import_js
+}
+
+output "sso_check_library_js" {
+  description = "sso-check library (defines ssoCheck(event)), to compose with another viewer-request CloudFront Function on the same behavior. Contains the HMAC key."
+  value       = local.sso_check_library_js
+  sensitive   = true
 }
 
 # -----------------------------------------------------------------------------
@@ -29,6 +54,11 @@ output "saml_acs_path" {
 output "saml_metadata_path" {
   description = "SAML metadata.xml path to configure in CloudFront"
   value       = local.saml_metadata_path
+}
+
+output "saml_login_path" {
+  description = "SAML login path to configure in CloudFront (login Lambda)"
+  value       = local.saml_login_path
 }
 
 output "saml_audience" {
@@ -104,15 +134,23 @@ output "saml_signing_certificate" {
 output "cloudfront_behaviors" {
   description = "CloudFront cache behaviors configuration to add for SSO authentication"
   value = {
-    # Add this to your default_cache_behavior
-    default = {
-      lambda_function_association = {
+    # Add this to the default_cache_behavior and every protected ordered_cache_behavior
+    protected = {
+      function_association = {
         event_type   = "viewer-request"
-        lambda_arn   = aws_lambda_function.protect.qualified_arn
-        include_body = false
+        function_arn = aws_cloudfront_function.sso_check.arn
       }
     }
     # Add these as ordered_cache_behavior
+    saml_login = {
+      path_pattern = local.saml_login_path
+      lambda_function_association = {
+        event_type   = "viewer-request"
+        lambda_arn   = aws_lambda_function.login.qualified_arn
+        include_body = false
+      }
+      allowed_methods = ["GET", "HEAD"]
+    }
     saml_acs = {
       path_pattern = local.saml_acs_path
       lambda_function_association = {

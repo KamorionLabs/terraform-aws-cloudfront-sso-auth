@@ -6,7 +6,7 @@ import type {
 
 import { ServiceProvider as serviceProvider, IdentityProvider as identityProvider } from 'samlify';
 import { spMetadata, idpMetadata, config, secrets, shouldSignAuthnRequests } from '../shared/config';
-import { getTokenDetails } from '../shared/utils/crypt';
+import { verifyToken } from '../shared/utils/token';
 import { getDomain, parseCookies } from '../shared/utils/cloudfront';
 
 const idp = identityProvider({
@@ -143,6 +143,8 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
     });
     console.log('SP created successfully');
 
+    delete request.headers['x-sso-user-email'];
+
     let accessGranted = false;
     let userEmail: string | undefined;
 
@@ -150,7 +152,7 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
     if (headers.cookie) {
       const cookies = parseCookies(headers.cookie);
       console.log('Cookie names:', Object.keys(cookies));
-      const tokenDetails = getTokenDetails(cookies[config.cookieName]);
+      const tokenDetails = verifyToken(cookies[config.cookieName]);
       if (tokenDetails) {
         console.log('Valid token found');
         accessGranted = true;

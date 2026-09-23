@@ -21,8 +21,7 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
   const jsonConfig = JSON.parse(fs.readFileSync(SAML_CONFIG_FILE, 'utf8'));
   config = {
     audience: jsonConfig.audience,
-    initVector: jsonConfig.initVector,
-    privateKey: jsonConfig.privateKey,
+    hmacKey: jsonConfig.hmacKey,
     idpMetadata: jsonConfig.idpMetadata,
     signingCert: jsonConfig.signingCert,
     signingPrivateKey: jsonConfig.signingPrivateKey,
@@ -34,8 +33,7 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
   console.log('Reading config from environment variables');
   config = {
     audience: process.env.SAML_AUDIENCE || 'PLACEHOLDER_AUDIENCE',
-    initVector: process.env.SAML_INIT_VECTOR || 'PLACEHOLDER_IV__',
-    privateKey: process.env.SAML_PRIVATE_KEY || 'PLACEHOLDER_PRIVATE_KEY_32CHARS_',
+    hmacKey: process.env.SAML_HMAC_KEY || 'PLACEHOLDER_HMAC_KEY',
     idpMetadata: process.env.SAML_IDP_METADATA || 'PLACEHOLDER_IDP_METADATA',
     signingCert: process.env.SAML_SIGNING_CERT || 'PLACEHOLDER_SIGNING_CERT',
     signingPrivateKey: process.env.SAML_SIGNING_PRIVATE_KEY || 'PLACEHOLDER_SIGNING_PRIVATE_KEY',
@@ -46,7 +44,7 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
 
 // Validate config - ensure no placeholders remain
 const hasPlaceholders = Object.values(config).some(v =>
-  typeof v === 'string' && v.includes('PLACEHOLDER')
+  typeof v !== 'string' || v.includes('PLACEHOLDER')
 );
 if (hasPlaceholders) {
   console.error('ERROR: Config contains placeholders. Run terraform apply to generate .saml-config.json');
@@ -58,8 +56,7 @@ let content = fs.readFileSync(CONFIG_FILE, 'utf8');
 
 // Replace placeholders with actual values
 content = content.replace(/'PLACEHOLDER_AUDIENCE'/g, JSON.stringify(config.audience));
-content = content.replace(/'PLACEHOLDER_IV__'/g, JSON.stringify(config.initVector));
-content = content.replace(/'PLACEHOLDER_PRIVATE_KEY_32CHARS_'/g, JSON.stringify(config.privateKey));
+content = content.replace(/'PLACEHOLDER_HMAC_KEY'/g, JSON.stringify(config.hmacKey));
 content = content.replace(/'PLACEHOLDER_IDP_METADATA'/g, JSON.stringify(config.idpMetadata));
 content = content.replace(/'PLACEHOLDER_SIGNING_CERT'/g, JSON.stringify(config.signingCert));
 content = content.replace(/'PLACEHOLDER_SIGNING_PRIVATE_KEY'/g, JSON.stringify(config.signingPrivateKey));

@@ -149,6 +149,8 @@ resource "aws_cloudfront_distribution" "main" {
     max_ttl     = 0
 
     # SSO Protection Lambda
+    # Lambda-only alternative to the sso-check CloudFront Function, for
+    # behaviors that carry no CloudFront Function in their viewer events.
     lambda_function_association {
       event_type   = "viewer-request"
       lambda_arn   = module.cloudfront_sso_auth.lambda_protect_arn

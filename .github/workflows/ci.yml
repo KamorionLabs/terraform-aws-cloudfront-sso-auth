@@ -100,8 +100,7 @@ jobs:
         run: npm run build
         env:
           SAML_AUDIENCE: 'test-audience'
-          SAML_INIT_VECTOR: '1234567890123456'
-          SAML_PRIVATE_KEY: '12345678901234567890123456789012'
+          SAML_HMAC_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
           SAML_IDP_METADATA: '<xml>test</xml>'
           SAML_SIGNING_CERT: 'test-signing-cert'
           SAML_SIGNING_PRIVATE_KEY: 'test-signing-private-key'
@@ -111,3 +110,10 @@ jobs:
           ls -la dist/
           ls -la dist/handlers/
           ls -la dist/shared/
+
+      - name: Session token contract (ACS Lambda vs sso-check CloudFront Function)
+        working-directory: .
+        run: node tests/sso-check.test.mjs
+        env:
+          SAML_AUDIENCE: 'test-audience'
+          SAML_HMAC_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
