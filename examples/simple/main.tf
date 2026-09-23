@@ -66,10 +66,32 @@ resource "aws_cloudfront_distribution" "example" {
       }
     }
 
-    # SSO authentication Lambda
+    # SSO session check (CloudFront Function): attach it to every protected
+    # behavior. It can share a behavior with other CloudFront Functions.
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = module.cloudfront_sso_auth.sso_check_function_arn
+    }
+  }
+
+  # SAML login endpoint: where sso-check sends viewers without a session
+  ordered_cache_behavior {
+    path_pattern           = "/saml/login"
+    target_origin_id       = "S3-example"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+
+    forwarded_values {
+      query_string = true
+      cookies {
+        forward = "none"
+      }
+    }
+
     lambda_function_association {
       event_type   = "viewer-request"
-      lambda_arn   = module.cloudfront_sso_auth.lambda_protect_arn
+      lambda_arn   = module.cloudfront_sso_auth.lambda_login_arn
       include_body = false
     }
   }

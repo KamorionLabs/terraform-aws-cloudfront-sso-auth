@@ -8,11 +8,9 @@ export const secrets = {
   // SAML audience (EntityID) - must match Identity Center application
   audience: 'PLACEHOLDER_AUDIENCE',
 
-  // AES encryption initialization vector (16 bytes)
-  initVector: 'PLACEHOLDER_IV__',
-
-  // AES encryption private key (32 bytes)
-  privateKey: 'PLACEHOLDER_PRIVATE_KEY_32CHARS_',
+  // HMAC-SHA256 key signing the session cookie (shared with the sso-check
+  // CloudFront Function)
+  hmacKey: 'PLACEHOLDER_HMAC_KEY',
 
   // Identity Provider SAML metadata XML
   idpMetadata: 'PLACEHOLDER_IDP_METADATA',
@@ -30,6 +28,7 @@ export const secrets = {
 export const config = {
   acsPath: '/saml/acs',
   metadataPath: '/saml/metadata.xml',
+  loginPath: '/saml/login',
   logoutPath: '/saml/logout',
   cookieName: 'sso_auth',
 

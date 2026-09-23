@@ -1,6 +1,6 @@
 # terraform-aws-cloudfront-sso-auth
 
-Terraform module to protect CloudFront distributions with AWS Identity Center (SSO) authentication using SAML and Lambda@Edge.
+Terraform module to protect CloudFront distributions with AWS Identity Center (SSO) authentication using SAML, a CloudFront Function for the session check and Lambda@Edge for the SAML flow.
 
 ## Credits
 
@@ -12,10 +12,15 @@ This module is based on the excellent work by:
 
 - SAML-based authentication with AWS Identity Center
 - No Cognito dependency - direct integration with Identity Center
-- Three Lambda@Edge functions for complete SAML flow
+- Session check in a CloudFront Function (`sso-check`), attachable to every cache behavior, even those already carrying other CloudFront Functions
+- Lambda@Edge functions for the SAML flow (`login`, `acs`, `metadata`), plus a Lambda-only `protect` alternative
 - Support for multiple CloudFront domains/aliases
-- Encrypted session cookies (AES-256)
+- Signed session cookies (HMAC-SHA256), configurable lifetime
 - Sub-module for Identity Center SAML application setup
+
+### Why a CloudFront Function for the session check
+
+AWS forbids combining CloudFront Functions and Lambda@Edge in the viewer events of one cache behavior (both events together, not only the same one). A Lambda@Edge gate can therefore only sit on behaviors without CloudFront Functions, which in practice leaves most of a site unprotected. The `sso-check` function verifies the cookie in under a millisecond at every edge location, and can be composed with another viewer-request function on the same behavior (`sso_check_import_js` + `sso_check_library_js`).
 
 ## Architecture
 
@@ -24,14 +29,18 @@ This module is based on the excellent work by:
 │   Browser   │────▶│   CloudFront     │────▶│  Origin (S3/ALB)│
 └─────────────┘     └──────────────────┘     └─────────────────┘
        │                    │
-       │              ┌─────┴─────┐
-       │              │Lambda@Edge│
-       │              │ (protect) │
-       │              └─────┬─────┘
+       │           ┌────────┴────────┐
+       │           │CloudFront Func. │
+       │           │   (sso-check)   │
+       │           └────────┬────────┘
        │                    │
-       │    No valid cookie │
+       │    No valid cookie │ 302 /saml/login?relay=...
        │◀───────────────────┘
-       │    Redirect to IdP
+       │
+       ▼
+┌──────────────────┐
+│   /saml/login    │  Lambda@Edge (login): signed AuthnRequest
+└──────────────────┘
        │
        ▼
 ┌─────────────────────┐
@@ -106,13 +115,26 @@ module "cloudfront_sso_auth" {
 resource "aws_cloudfront_distribution" "main" {
   # ... your existing config ...
 
-  # Default behavior with SSO protection
+  # Default behavior with SSO protection. Add the same association to EVERY
+  # ordered_cache_behavior that must be protected.
   default_cache_behavior {
     # ... your config ...
 
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = module.cloudfront_sso_auth.sso_check_function_arn
+    }
+  }
+
+  # SAML login endpoint (where sso-check redirects)
+  ordered_cache_behavior {
+    path_pattern    = "/saml/login"
+    allowed_methods = ["GET", "HEAD"]
+    # ... your config, query string forwarded ...
+
     lambda_function_association {
       event_type   = "viewer-request"
-      lambda_arn   = module.cloudfront_sso_auth.lambda_protect_arn
+      lambda_arn   = module.cloudfront_sso_auth.lambda_login_arn
       include_body = false
     }
   }
@@ -143,6 +165,23 @@ resource "aws_cloudfront_distribution" "main" {
   }
 }
 ```
+
+### Composing with an existing viewer-request function
+
+A behavior takes one function per event. When a behavior already has a viewer-request CloudFront Function, compose the check into it instead of attaching `sso-check` beside it:
+
+```hcl
+code = join("\n", [
+  module.cloudfront_sso_auth.sso_check_import_js, # imports first
+  replace(file("my-function.js"), "async function handler(event) {", "async function myHandler(event) {"),
+  module.cloudfront_sso_auth.sso_check_library_js, # defines ssoCheck(event)
+  "async function handler(event) {",
+  "    return ssoCheck(event) || myHandler(event);",
+  "}",
+])
+```
+
+The library is about 2 KB once deployed (the limit is 10 KB per function).
 
 ### Step 5: Complete Identity Center Configuration
 
@@ -178,6 +217,8 @@ resource "aws_cloudfront_distribution" "main" {
 | saml_audience | SAML audience identifier (EntityID) | string | yes |
 | idp_metadata | Identity Provider SAML metadata XML | string | yes |
 | cloudfront_domains | List of CloudFront domain names | list(string) | no |
+| session_duration_hours | Session cookie lifetime (1-24, default 8) | number | no |
+| sign_authn_requests | Sign SAML AuthnRequests | bool | no |
 | name_prefix | Prefix for resource names | string | no |
 | log_retention_days | CloudWatch log retention | number | no |
 | tags | Tags to apply | map(string) | no |
@@ -186,7 +227,10 @@ resource "aws_cloudfront_distribution" "main" {
 
 | Name | Description |
 |------|-------------|
-| lambda_protect_arn | ARN of protect Lambda (for default behavior) |
+| sso_check_function_arn | ARN of the sso-check CloudFront Function (viewer-request on protected behaviors) |
+| sso_check_import_js / sso_check_library_js | Pieces to compose sso-check into another function (library is sensitive) |
+| lambda_login_arn | ARN of login Lambda (for /saml/login) |
+| lambda_protect_arn | ARN of protect Lambda (Lambda-only alternative to sso-check) |
 | lambda_acs_arn | ARN of ACS Lambda (for /saml/acs) |
 | lambda_metadata_arn | ARN of metadata Lambda (for /saml/metadata.xml) |
 | saml_acs_urls | ACS URLs for Identity Center configuration |
@@ -225,10 +269,17 @@ Due to AWS API limitations, some configuration must be done manually:
 
 ## Security Considerations
 
-- Session cookies are encrypted with AES-256-CBC
-- Encryption keys are stored in Secrets Manager
-- Lambda@Edge cannot access Secrets Manager at runtime, so keys are baked into the code at build time
-- Consider rotating the encryption keys periodically by updating the Secrets Manager secret and redeploying
+- Session cookies are signed with HMAC-SHA256 (`v1.<expiry>.<hex email>.<mac>`), the MAC also covering the SAML audience; they are HttpOnly, Secure, SameSite=Lax
+- The HMAC key (`random_password.hmac_key`) is baked into the Lambda@Edge package and the CloudFront Function code at deploy time (neither can read Secrets Manager at runtime): anyone allowed to read those functions can read it
+- Rotating the key (`terraform apply -replace=module.<name>.random_password.hmac_key`) signs everyone out once
+- `x-sso-user-email`, forwarded to the origin for authenticated requests, is always removed from the viewer request first, so it cannot be spoofed
+- `/saml/login` only accepts same-site, path-absolute relay targets (no open redirect)
+
+## Upgrading from 0.x to 1.0
+
+- The cookie format changes (signed instead of AES-encrypted): every user signs in again once after the apply.
+- Replace the `protect` Lambda@Edge association with a `function_association` to `sso_check_function_arn` on the default behavior and every protected ordered behavior, and add the `/saml/login` behavior (login Lambda). `protect` still exists and verifies the new cookie, for setups that cannot use CloudFront Functions.
+- `random_password.init_vector` and `random_password.private_key` are destroyed; `random_password.hmac_key` is created.
 
 ## License
 

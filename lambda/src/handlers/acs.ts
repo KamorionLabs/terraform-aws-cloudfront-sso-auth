@@ -11,7 +11,7 @@ import {
 } from 'samlify';
 import { parse as parseQueryString } from 'node:querystring';
 import { spMetadata, idpMetadata, config, secrets } from '../shared/config';
-import { encrypt, isValidAudience } from '../shared/utils/crypt';
+import { signToken, isValidAudience } from '../shared/utils/token';
 import { getDomain } from '../shared/utils/cloudfront';
 
 const idp = identityProvider({
@@ -134,15 +134,11 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
           const relayState = (payloadAsObject.RelayState as string) || '/';
           console.log('RelayState for redirect:', relayState);
 
-          // Create encrypted authentication token (includes user email). The
-          // token is valid for the whole session, not just the assertion window.
-          const encryptedToken = encrypt({
-            audience: parseResult.extract.audience,
-            validUntil: sessionExpiry,
-            domain,
-            userEmail,
-          });
-          console.log('Encrypted token created with user email');
+          // Signed session token, valid for the whole session rather than the
+          // assertion window. Verified at the edge by the sso-check CloudFront
+          // Function and by the protect Lambda.
+          const sessionToken = signToken(userEmail, sessionExpiry / 1000);
+          console.log('Session token signed');
 
           // Cookie expiry matches the session lifetime.
           const cookieExpiry = new Date(sessionExpiry).toUTCString();
@@ -154,7 +150,7 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
               'set-cookie': [
                 {
                   key: 'Set-Cookie',
-                  value: `${config.cookieName}=${encryptedToken}; Expires=${cookieExpiry}; Path=/; Secure; HttpOnly; SameSite=Lax`,
+                  value: `${config.cookieName}=${sessionToken}; Expires=${cookieExpiry}; Path=/; Secure; HttpOnly; SameSite=Lax`,
                 },
               ],
               location: [
