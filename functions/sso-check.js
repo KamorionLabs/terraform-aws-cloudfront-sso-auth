@@ -18,6 +18,7 @@ var ssoCheck = (function () {
     var COOKIE = /*__SSO_COOKIE_NAME__*/'sso_auth';
     var LOGIN = /*__SSO_LOGIN_PATH__*/'/saml/login';
     var LOGOUT = /*__SSO_LOGOUT_PATH__*/'/saml/logout';
+    var DOMAIN = /*__SSO_COOKIE_DOMAIN__*/'';
     var USER = 'x-sso-user-email';
     var ASSET = /\.(?:svg|ico|png|jpe?g|gif|webp|avif|bmp|woff2?|ttf|otf|eot|css|mp4|webm|ogg|mp3|wav)$/i;
     var HEX = /^(?:[0-9a-f]{2})*$/;
@@ -59,7 +60,7 @@ var ssoCheck = (function () {
 
         if (req.uri === LOGOUT) {
             var c = {};
-            c[COOKIE] = { value: '', attributes: 'Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax' };
+            c[COOKIE] = { value: '', attributes: 'Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax' + (DOMAIN ? '; Domain=' + DOMAIN : '') };
             return redirect('/', c);
         }
 
@@ -70,8 +71,14 @@ var ssoCheck = (function () {
             return undefined;
         }
 
+        // Every value of the name: a parent-domain cookie and a host-only one
+        // can coexist.
         var ck = req.cookies && req.cookies[COOKIE];
-        var email = verify(ck && ck.value ? String(ck.value) : '');
+        var tokens = ck ? (ck.multiValue || [ck]) : [];
+        var email = null;
+        for (var t = 0; t < tokens.length && email === null; t++) {
+            email = verify(tokens[t].value ? String(tokens[t].value) : '');
+        }
         if (email !== null) {
             if (email) {
                 h[USER] = { value: email };

@@ -7,7 +7,7 @@ import { ServiceProvider as serviceProvider, IdentityProvider as identityProvide
 import { parse as parseQueryString } from 'node:querystring';
 import { spMetadata, idpMetadata, secrets, shouldSignAuthnRequests } from '../shared/config';
 import { getDomain } from '../shared/utils/cloudfront';
-import { safeRelay } from '../shared/utils/relay';
+import { acsHost, relayStateFor } from '../shared/utils/session';
 
 const idp = identityProvider({
   metadata: idpMetadata,
@@ -37,14 +37,14 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
       return;
     }
 
-    const relay = safeRelay(parseQueryString(request.querystring || '').relay);
+    const relay = parseQueryString(request.querystring || '').relay;
     const signRequests = shouldSignAuthnRequests();
     const sp = serviceProvider({
-      metadata: spMetadata(domain),
+      metadata: spMetadata(acsHost(domain)),
       privateKey: signRequests ? secrets.signingPrivateKey : undefined,
       authnRequestsSigned: signRequests,
     });
-    sp.entitySetting.relayState = relay;
+    sp.entitySetting.relayState = relayStateFor(domain, typeof relay === 'string' ? relay : '/');
     const { context: loginRequestUrl } = sp.createLoginRequest(idp, 'redirect');
 
     callback(null, {

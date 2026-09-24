@@ -3,6 +3,7 @@ import type { CloudFrontRequestHandler, CloudFrontRequestResult } from 'aws-lamb
 import { ServiceProvider as serviceProvider } from 'samlify';
 import { spMetadata } from '../shared/config';
 import { getDomain } from '../shared/utils/cloudfront';
+import { acsHost } from '../shared/utils/session';
 
 const invalidRequest: CloudFrontRequestResult = {
   status: '400',
@@ -33,7 +34,7 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
     }
 
     const sp = serviceProvider({
-      metadata: spMetadata(domain),
+      metadata: spMetadata(acsHost(domain)),
     });
 
     const response: CloudFrontRequestResult = {

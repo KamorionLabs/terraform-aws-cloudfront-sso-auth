@@ -72,12 +72,12 @@ output "saml_audience" {
 
 output "saml_acs_urls" {
   description = "SAML ACS URLs to configure in Identity Center (one per domain)"
-  value       = [for domain in var.cloudfront_domains : "https://${domain}${local.saml_acs_path}"]
+  value       = [for domain in local.acs_domains : "https://${domain}${local.saml_acs_path}"]
 }
 
 output "saml_metadata_urls" {
   description = "URLs to download SP metadata after deployment (one per domain)"
-  value       = [for domain in var.cloudfront_domains : "https://${domain}${local.saml_metadata_path}"]
+  value       = [for domain in local.acs_domains : "https://${domain}${local.saml_metadata_path}"]
 }
 
 # -----------------------------------------------------------------------------
@@ -102,7 +102,7 @@ output "sp_metadata_xml" {
             </ds:KeyInfo>
         </md:KeyDescriptor>
         <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
-${join("\n", [for i, domain in var.cloudfront_domains : "        <md:AssertionConsumerService${i == 0 ? " isDefault=\"true\"" : ""} index=\"${i}\" Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://${domain}${local.saml_acs_path}\"/>"])}
+${join("\n", [for i, domain in local.acs_domains : "        <md:AssertionConsumerService${i == 0 ? " isDefault=\"true\"" : ""} index=\"${i}\" Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://${domain}${local.saml_acs_path}\"/>"])}
     </md:SPSSODescriptor>
 </md:EntityDescriptor>
 XML
@@ -192,4 +192,9 @@ output "session_cookie_name" {
 output "saml_logout_path" {
   description = "Path clearing the session cookie"
   value       = local.saml_logout_path
+}
+
+output "session_cookie_domain" {
+  description = "Domain of the session cookie (empty: host-only)"
+  value       = var.cookie_domain
 }

@@ -7,7 +7,8 @@ import type {
 import { ServiceProvider as serviceProvider, IdentityProvider as identityProvider } from 'samlify';
 import { spMetadata, idpMetadata, config, secrets, shouldSignAuthnRequests, bypassHeaders } from '../shared/config';
 import { verifyToken } from '../shared/utils/token';
-import { getDomain, parseCookies } from '../shared/utils/cloudfront';
+import { getDomain, readCookieValues } from '../shared/utils/cloudfront';
+import { acsHost, clearedCookie, relayStateFor } from '../shared/utils/session';
 import { hasBypassHeader } from '../shared/utils/bypass';
 
 const idp = identityProvider({
@@ -102,7 +103,7 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
           'set-cookie': [
             {
               key: 'Set-Cookie',
-              value: `${config.cookieName}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax`,
+              value: clearedCookie(),
             },
           ],
           'cache-control': [
@@ -149,7 +150,7 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
     const signRequests = shouldSignAuthnRequests();
     console.log('Creating SP with authnRequestsSigned:', signRequests);
     const sp = serviceProvider({
-      metadata: spMetadata(domain),
+      metadata: spMetadata(acsHost(domain)),
       privateKey: signRequests ? secrets.signingPrivateKey : undefined,
       authnRequestsSigned: signRequests,
     });
@@ -158,11 +159,12 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
     let accessGranted = false;
     let userEmail: string | undefined;
 
-    // Check for valid authentication cookie
+    // Check for valid authentication cookie (every value of the name: a
+    // parent-domain cookie and a host-only one can coexist)
     if (headers.cookie) {
-      const cookies = parseCookies(headers.cookie);
-      console.log('Cookie names:', Object.keys(cookies));
-      const tokenDetails = verifyToken(cookies[config.cookieName]);
+      const tokenDetails = readCookieValues(headers.cookie, config.cookieName)
+        .map((token) => verifyToken(token))
+        .find((details) => details !== null);
       if (tokenDetails) {
         console.log('Valid token found');
         accessGranted = true;
@@ -182,7 +184,7 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
       // from request.uri, so it must be concatenated explicitly into RelayState
       // for ACS to redirect back to the original path with its params intact.
       const querystring = request.querystring;
-      const relayStateUri = querystring ? `${uri}?${querystring}` : uri;
+      const relayStateUri = relayStateFor(domain, querystring ? `${uri}?${querystring}` : uri);
       console.log('RelayState:', relayStateUri);
       sp.entitySetting.relayState = relayStateUri;
       const { context: loginRequestUrl } = sp.createLoginRequest(idp, 'redirect');
