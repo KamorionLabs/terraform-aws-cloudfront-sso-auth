@@ -5,9 +5,10 @@ import type {
 } from 'aws-lambda';
 
 import { ServiceProvider as serviceProvider, IdentityProvider as identityProvider } from 'samlify';
-import { spMetadata, idpMetadata, config, secrets, shouldSignAuthnRequests } from '../shared/config';
+import { spMetadata, idpMetadata, config, secrets, shouldSignAuthnRequests, bypassHeaders } from '../shared/config';
 import { verifyToken } from '../shared/utils/token';
 import { getDomain, parseCookies } from '../shared/utils/cloudfront';
+import { hasBypassHeader } from '../shared/utils/bypass';
 
 const idp = identityProvider({
   metadata: idpMetadata,
@@ -116,6 +117,17 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
       return;
     }
 
+    // Never trust an identity header sent by the viewer.
+    delete request.headers['x-sso-user-email'];
+
+    // Let through requests carrying a configured bypass header (e.g. the WAF
+    // trusted marker): they are already authorised upstream, no session needed.
+    if (hasBypassHeader(headers, bypassHeaders)) {
+      console.log('Skipping auth for bypass header');
+      callback(null, request);
+      return;
+    }
+
     // Skip auth for passive static sub-resources so they are never redirected
     // to the HTML login portal. These are public assets (already public in
     // production) with no sensitive data; navigations and XHR/API fetches stay
@@ -142,8 +154,6 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
       authnRequestsSigned: signRequests,
     });
     console.log('SP created successfully');
-
-    delete request.headers['x-sso-user-email'];
 
     let accessGranted = false;
     let userEmail: string | undefined;

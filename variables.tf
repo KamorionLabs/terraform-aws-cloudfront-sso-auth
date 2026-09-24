@@ -62,3 +62,14 @@ variable "session_duration_hours" {
     error_message = "session_duration_hours must be between 1 and 24."
   }
 }
+
+variable "bypass_headers" {
+  description = "Request headers letting a request through the protect Lambda without an SSO session, as { name = value }. Only for headers the viewer cannot forge, typically an x-amzn-waf-* header inserted by a WAF rule on an ACL that also blocks client-supplied x-amzn-waf-* headers: anywhere else, sending the header would skip the SSO."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for name in keys(var.bypass_headers) : name == lower(name)])
+    error_message = "bypass_headers names must be lowercase: CloudFront hands Lambda@Edge lowercased header keys."
+  }
+}

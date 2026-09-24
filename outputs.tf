@@ -171,3 +171,25 @@ output "cloudfront_behaviors" {
     }
   }
 }
+
+# -----------------------------------------------------------------------------
+# Session token, for a session check running outside this module (e.g. inside
+# an existing viewer-request Lambda@Edge that cannot share its behavior with
+# the protect Lambda or the sso-check CloudFront Function)
+# -----------------------------------------------------------------------------
+
+output "session_hmac_key" {
+  description = "HMAC-SHA256 key signing the session cookie. Token: v1.<expiry epoch seconds>.<hex utf-8 email>.<hex HMAC>, the MAC covering \"<saml_audience>|v1.<expiry>.<email hex>\"."
+  value       = random_password.hmac_key.result
+  sensitive   = true
+}
+
+output "session_cookie_name" {
+  description = "Name of the session cookie set by the ACS Lambda"
+  value       = local.cookie_name
+}
+
+output "saml_logout_path" {
+  description = "Path clearing the session cookie"
+  value       = local.saml_logout_path
+}

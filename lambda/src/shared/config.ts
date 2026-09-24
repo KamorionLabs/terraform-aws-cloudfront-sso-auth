@@ -23,6 +23,10 @@ export const secrets = {
 
   // Whether to sign SAML AuthnRequests (must match IDP WantAuthnRequestsSigned)
   signAuthnRequests: 'PLACEHOLDER_SIGN_AUTHN_REQUESTS',
+
+  // JSON object { header name: value } letting a request through the protect
+  // Lambda without a session (e.g. a WAF-inserted trusted marker)
+  bypassHeaders: 'PLACEHOLDER_BYPASS_HEADERS',
 };
 
 export const config = {
@@ -81,3 +85,15 @@ export function spMetadata(domain: string): string {
 }
 
 export const idpMetadata = secrets.idpMetadata;
+
+// Fails closed: an unparsable value grants no bypass.
+function parseBypassHeaders(raw: string): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export const bypassHeaders = parseBypassHeaders(secrets.bypassHeaders);
