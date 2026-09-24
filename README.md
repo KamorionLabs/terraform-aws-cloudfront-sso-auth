@@ -195,6 +195,17 @@ bypass_headers = {
 
 AWS WAF prefixes inserted headers with `x-amzn-waf-`, but it does not strip one sent by the client: the same ACL must block requests that already carry an `x-amzn-waf-*` header, otherwise anyone can skip the SSO by sending it. Only `protect` honours `bypass_headers`; `sso-check` does not.
 
+### One login for many hosts (cookie_domain, auth_host)
+
+By default the session cookie is host-only and each protected host is its own ACS URL, so the Identity Center application lists one ACS URL per host. When the hosts share a parent domain, the shared session mode needs a single one:
+
+```hcl
+cookie_domain = ".preprod.example.com"     # session cookie sent to every host under it
+auth_host     = "sso.preprod.example.com"  # the only ACS URL: https://sso.preprod.example.com/saml/acs
+```
+
+A login started on any host goes through `auth_host`, whose ACS sets the cookie on `cookie_domain` and sends the user back to the original URL (only an https URL on a host under `cookie_domain` is followed). One login then covers every host under the domain. `auth_host` must serve the `/saml/*` behaviors and be reachable by the users being authenticated. The cookie is sent to every host under the domain, protected or not: pick the narrowest common parent.
+
 ### Checking the session in your own Lambda@Edge
 
 A behavior takes one viewer-request Lambda@Edge. When it already has one (a bot-protection Lambda, say), verify the session inside it instead: `session_hmac_key` (sensitive), `saml_audience` and `session_cookie_name` are enough to check the token, and a request without a valid session is redirected to `saml_login_path?relay=<path and query>`. The token format is `v1.<expiry epoch seconds>.<hex utf-8 email>.<hex HMAC-SHA256>`, the MAC covering `<audience>|v1.<expiry>.<email hex>` (see `lambda/src/shared/utils/token.ts`). Route `/saml/login`, `/saml/acs` and `/saml/metadata.xml` to the module's Lambdas on their own behaviors, as in Step 4.
@@ -235,6 +246,8 @@ A behavior takes one viewer-request Lambda@Edge. When it already has one (a bot-
 | cloudfront_domains | List of CloudFront domain names | list(string) | no |
 | session_duration_hours | Session cookie lifetime (1-24, default 8) | number | no |
 | sign_authn_requests | Sign SAML AuthnRequests | bool | no |
+| cookie_domain | Session cookie domain with a leading dot; empty = host-only | string | no |
+| auth_host | Single host receiving every assertion (one ACS URL); requires cookie_domain | string | no |
 | bypass_headers | Headers (`{ name = value }`, lowercase names) letting a request through `protect` without a session; unforgeable headers only | map(string) | no |
 | name_prefix | Prefix for resource names | string | no |
 | log_retention_days | CloudWatch log retention | number | no |
@@ -256,6 +269,7 @@ A behavior takes one viewer-request Lambda@Edge. When it already has one (a bot-
 | session_hmac_key | Key signing the session cookie, for a session check in your own Lambda (sensitive) |
 | session_cookie_name | Name of the session cookie |
 | saml_logout_path | Path clearing the session cookie |
+| session_cookie_domain | Domain of the session cookie (empty: host-only) |
 
 ## Sub-modules
 

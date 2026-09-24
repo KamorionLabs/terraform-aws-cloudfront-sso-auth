@@ -73,3 +73,25 @@ variable "bypass_headers" {
     error_message = "bypass_headers names must be lowercase: CloudFront hands Lambda@Edge lowercased header keys."
   }
 }
+
+variable "cookie_domain" {
+  description = "Domain of the session cookie, with its leading dot (e.g. \".preprod.example.com\"): one login then covers every protected host under it. Empty keeps a host-only cookie. Every host under the domain receives the cookie, protected or not."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.cookie_domain == "" || can(regex("^\\.[a-z0-9-]+(\\.[a-z0-9-]+)+$", var.cookie_domain))
+    error_message = "cookie_domain must be empty or a lowercase domain with a leading dot, e.g. \".preprod.example.com\"."
+  }
+}
+
+variable "auth_host" {
+  description = "Single host whose /saml/acs receives every assertion, so the Identity Center application needs one ACS URL whatever the number of protected hosts. Requires cookie_domain, and must sit under it and serve the /saml/* behaviors. Empty keeps the ACS on each requesting host (one ACS URL per host)."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.auth_host == "" || (var.cookie_domain != "" && endswith(var.auth_host, var.cookie_domain))
+    error_message = "auth_host requires cookie_domain and must be a host under it."
+  }
+}

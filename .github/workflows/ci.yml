@@ -117,3 +117,7 @@ jobs:
         env:
           SAML_AUDIENCE: 'test-audience'
           SAML_HMAC_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+
+      - name: Shared session mode
+        working-directory: .
+        run: node tests/session.test.mjs

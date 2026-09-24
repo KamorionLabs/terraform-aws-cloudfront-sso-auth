@@ -21,11 +21,15 @@ locals {
   saml_logout_path   = "/saml/logout"
   cookie_name        = "sso_auth"
 
+  # ACS URLs declared in the SP metadata: the auth host alone in shared session
+  # mode, one per CloudFront domain otherwise.
+  acs_domains = var.auth_host != "" ? [var.auth_host] : var.cloudfront_domains
+
   # The sso-check library, full-line comments blanked and indentation stripped
   # (lines kept, so deployed line numbers match the source) to stay far under
   # the 10 KB CloudFront Functions limit once composed with another function.
   # Every sentinel is replaced together with its fail-closed fallback.
-  sso_check_library_js = replace(replace(replace(replace(replace(
+  sso_check_library_js = replace(replace(replace(replace(replace(replace(
     join("\n", [
       for line in split("\n", file("${path.module}/functions/sso-check.js")) :
       can(regex("^\\s*//", line)) ? "" : trimspace(line)
@@ -34,7 +38,8 @@ locals {
     "/*__SSO_AUDIENCE__*/''", jsonencode(var.saml_audience)),
     "/*__SSO_COOKIE_NAME__*/'sso_auth'", jsonencode(local.cookie_name)),
     "/*__SSO_LOGIN_PATH__*/'/saml/login'", jsonencode(local.saml_login_path)),
-    "/*__SSO_LOGOUT_PATH__*/'/saml/logout'", jsonencode(local.saml_logout_path)
+    "/*__SSO_LOGOUT_PATH__*/'/saml/logout'", jsonencode(local.saml_logout_path)),
+    "/*__SSO_COOKIE_DOMAIN__*/''", jsonencode(var.cookie_domain)
   )
 
   sso_check_import_js = "import crypto from 'crypto';"
@@ -170,6 +175,8 @@ resource "local_file" "saml_config" {
     signAuthnRequests      = var.sign_authn_requests ? "true" : "false"
     sessionDurationSeconds = tostring(var.session_duration_hours * 3600)
     bypassHeaders          = jsonencode(var.bypass_headers)
+    cookieDomain           = var.cookie_domain
+    authHost               = var.auth_host
   })
   file_permission = "0600"
 }
@@ -194,6 +201,8 @@ resource "null_resource" "build_lambda" {
       file("${path.module}/lambda/src/shared/utils/token.ts"),
       file("${path.module}/lambda/src/shared/utils/cloudfront.ts"),
       file("${path.module}/lambda/src/shared/utils/bypass.ts"),
+      file("${path.module}/lambda/src/shared/utils/session.ts"),
+      file("${path.module}/lambda/src/shared/utils/relay.ts"),
       file("${path.module}/lambda/package.json"),
     ]))
     secrets_version = aws_secretsmanager_secret_version.saml_config.version_id

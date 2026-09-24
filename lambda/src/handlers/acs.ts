@@ -13,6 +13,7 @@ import { parse as parseQueryString } from 'node:querystring';
 import { spMetadata, idpMetadata, config, secrets } from '../shared/config';
 import { signToken, isValidAudience } from '../shared/utils/token';
 import { getDomain } from '../shared/utils/cloudfront';
+import { cookieAttributes, redirectTarget } from '../shared/utils/session';
 
 const idp = identityProvider({
   metadata: idpMetadata,
@@ -130,9 +131,10 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
         console.log('User email extracted:', userEmail);
 
         if (audienceValid && assertionExpiry > now) {
-          // Get original URL from RelayState
-          const relayState = (payloadAsObject.RelayState as string) || '/';
-          console.log('RelayState for redirect:', relayState);
+          // Back to where the login started, validated: a same-host path, or
+          // with an auth host an https URL under the cookie domain.
+          const location = redirectTarget(domain, payloadAsObject.RelayState);
+          console.log('Redirect target:', location);
 
           // Signed session token, valid for the whole session rather than the
           // assertion window. Verified at the edge by the sso-check CloudFront
@@ -150,13 +152,13 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
               'set-cookie': [
                 {
                   key: 'Set-Cookie',
-                  value: `${config.cookieName}=${sessionToken}; Expires=${cookieExpiry}; Path=/; Secure; HttpOnly; SameSite=Lax`,
+                  value: `${config.cookieName}=${sessionToken}; Expires=${cookieExpiry}; ${cookieAttributes()}`,
                 },
               ],
               location: [
                 {
                   key: 'Location',
-                  value: `https://${domain}${relayState}`,
+                  value: location,
                 },
               ],
               'cache-control': [
@@ -167,7 +169,6 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
               ],
             },
           };
-          console.log('Redirecting to:', `https://${domain}${relayState}`);
           callback(null, response);
         } else {
           console.error('Invalid audience or expired assertion. Audience valid:', audienceValid, 'Assertion fresh:', assertionExpiry > now);

@@ -157,6 +157,18 @@ await test('logout clears the cookie and goes home', () => {
   assert.match(r.cookies.sso_auth.attributes, /Expires=Thu, 01 Jan 1970/);
 });
 
+await test('a parent-domain cookie shadowed by a stale host-only one is still accepted', () => {
+  const e = event({ dest: 'document' });
+  e.request.cookies.sso_auth = { value: 'stale', multiValue: [{ value: 'stale' }, { value: valid }] };
+  assert.equal(handler(e), e.request);
+});
+
+await test('logout clears the cookie on its shared domain', async () => {
+  const { handler: shared } = await loadFunction([...SUBSTITUTIONS, ["/*__SSO_COOKIE_DOMAIN__*/''", '.preprod.example.com']]);
+  const r = shared(event({ uri: '/saml/logout', cookie: valid }));
+  assert.match(r.cookies.sso_auth.attributes, /; Domain=\.preprod\.example\.com$/);
+});
+
 await test('an unsubstituted key fails closed', async () => {
   const { handler: unconfigured } = await loadFunction(SUBSTITUTIONS.slice(1));
   assert.equal(unconfigured(event({ cookie: valid, dest: 'document' })).statusCode, 302);

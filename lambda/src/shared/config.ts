@@ -36,6 +36,12 @@ export const config = {
   logoutPath: '/saml/logout',
   cookieName: 'sso_auth',
 
+  // Shared session mode, injected at build time (empty = per-host): cookie
+  // domain covering every protected host (e.g. '.preprod.example.com') and the
+  // single host whose /saml/acs receives the assertion.
+  cookieDomain: 'PLACEHOLDER_COOKIE_DOMAIN',
+  authHost: 'PLACEHOLDER_AUTH_HOST',
+
   // Session cookie lifetime in seconds, injected at build time by
   // scripts/inject-config.js. Decoupled from the SAML assertion's short
   // Conditions/notOnOrAfter window so long flows (e.g. multi-step booking
