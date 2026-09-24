@@ -169,6 +169,7 @@ resource "local_file" "saml_config" {
     signingPrivateKey      = tls_private_key.saml_signing.private_key_pem
     signAuthnRequests      = var.sign_authn_requests ? "true" : "false"
     sessionDurationSeconds = tostring(var.session_duration_hours * 3600)
+    bypassHeaders          = jsonencode(var.bypass_headers)
   })
   file_permission = "0600"
 }
@@ -192,6 +193,7 @@ resource "null_resource" "build_lambda" {
       file("${path.module}/lambda/src/shared/config.ts"),
       file("${path.module}/lambda/src/shared/utils/token.ts"),
       file("${path.module}/lambda/src/shared/utils/cloudfront.ts"),
+      file("${path.module}/lambda/src/shared/utils/bypass.ts"),
       file("${path.module}/lambda/package.json"),
     ]))
     secrets_version = aws_secretsmanager_secret_version.saml_config.version_id

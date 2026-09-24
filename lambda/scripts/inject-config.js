@@ -27,6 +27,7 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
     signingPrivateKey: jsonConfig.signingPrivateKey,
     signAuthnRequests: jsonConfig.signAuthnRequests,
     sessionDurationSeconds: jsonConfig.sessionDurationSeconds || '28800',
+    bypassHeaders: jsonConfig.bypassHeaders || '{}',
   };
 } else {
   // Fallback to environment variables (legacy)
@@ -39,6 +40,7 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
     signingPrivateKey: process.env.SAML_SIGNING_PRIVATE_KEY || 'PLACEHOLDER_SIGNING_PRIVATE_KEY',
     signAuthnRequests: process.env.SAML_SIGN_AUTHN_REQUESTS || 'false',
     sessionDurationSeconds: process.env.SAML_SESSION_DURATION_SECONDS || '28800',
+    bypassHeaders: process.env.SAML_BYPASS_HEADERS || '{}',
   };
 }
 
@@ -62,6 +64,7 @@ content = content.replace(/'PLACEHOLDER_SIGNING_CERT'/g, JSON.stringify(config.s
 content = content.replace(/'PLACEHOLDER_SIGNING_PRIVATE_KEY'/g, JSON.stringify(config.signingPrivateKey));
 content = content.replace(/'PLACEHOLDER_SIGN_AUTHN_REQUESTS'/g, JSON.stringify(config.signAuthnRequests));
 content = content.replace(/'PLACEHOLDER_SESSION_DURATION_SECONDS'/g, JSON.stringify(String(config.sessionDurationSeconds)));
+content = content.replace(/'PLACEHOLDER_BYPASS_HEADERS'/g, JSON.stringify(config.bypassHeaders));
 
 // Write back
 fs.writeFileSync(CONFIG_FILE, content);

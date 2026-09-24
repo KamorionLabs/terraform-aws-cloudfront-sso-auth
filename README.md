@@ -183,6 +183,22 @@ code = join("\n", [
 
 The library is about 2 KB once deployed (the limit is 10 KB per function).
 
+### Letting upstream-trusted requests through (bypass_headers)
+
+When a WAF already decides which requests are trusted (an IP allowlist, for instance), it can mark them with an inserted header and the `protect` Lambda lets them through without an SSO session:
+
+```hcl
+bypass_headers = {
+  "x-amzn-waf-trusted" = "bypass" # WAF custom_request_handling insert_header "trusted"
+}
+```
+
+AWS WAF prefixes inserted headers with `x-amzn-waf-`, but it does not strip one sent by the client: the same ACL must block requests that already carry an `x-amzn-waf-*` header, otherwise anyone can skip the SSO by sending it. Only `protect` honours `bypass_headers`; `sso-check` does not.
+
+### Checking the session in your own Lambda@Edge
+
+A behavior takes one viewer-request Lambda@Edge. When it already has one (a bot-protection Lambda, say), verify the session inside it instead: `session_hmac_key` (sensitive), `saml_audience` and `session_cookie_name` are enough to check the token, and a request without a valid session is redirected to `saml_login_path?relay=<path and query>`. The token format is `v1.<expiry epoch seconds>.<hex utf-8 email>.<hex HMAC-SHA256>`, the MAC covering `<audience>|v1.<expiry>.<email hex>` (see `lambda/src/shared/utils/token.ts`). Route `/saml/login`, `/saml/acs` and `/saml/metadata.xml` to the module's Lambdas on their own behaviors, as in Step 4.
+
 ### Step 5: Complete Identity Center Configuration
 
 1. Deploy your CloudFront distribution
@@ -219,6 +235,7 @@ The library is about 2 KB once deployed (the limit is 10 KB per function).
 | cloudfront_domains | List of CloudFront domain names | list(string) | no |
 | session_duration_hours | Session cookie lifetime (1-24, default 8) | number | no |
 | sign_authn_requests | Sign SAML AuthnRequests | bool | no |
+| bypass_headers | Headers (`{ name = value }`, lowercase names) letting a request through `protect` without a session; unforgeable headers only | map(string) | no |
 | name_prefix | Prefix for resource names | string | no |
 | log_retention_days | CloudWatch log retention | number | no |
 | tags | Tags to apply | map(string) | no |
@@ -236,6 +253,9 @@ The library is about 2 KB once deployed (the limit is 10 KB per function).
 | saml_acs_urls | ACS URLs for Identity Center configuration |
 | saml_metadata_urls | URLs to download SP metadata |
 | secrets_manager_arn | ARN of Secrets Manager secret |
+| session_hmac_key | Key signing the session cookie, for a session check in your own Lambda (sensitive) |
+| session_cookie_name | Name of the session cookie |
+| saml_logout_path | Path clearing the session cookie |
 
 ## Sub-modules
 
