@@ -4,16 +4,26 @@ import type {
   CloudFrontRequestResult,
 } from 'aws-lambda';
 
-import { ServiceProvider as serviceProvider, IdentityProvider as identityProvider } from 'samlify';
+import type * as Samlify from 'samlify';
 import { spMetadata, idpMetadata, config, secrets, shouldSignAuthnRequests, bypassHeaders } from '../shared/config';
 import { verifyToken } from '../shared/utils/token';
 import { getDomain, readCookieValues } from '../shared/utils/cloudfront';
 import { acsHost, clearedCookie, relayStateFor } from '../shared/utils/session';
 import { hasBypassHeader } from '../shared/utils/bypass';
 
-const idp = identityProvider({
-  metadata: idpMetadata,
-});
+// samlify and the IdP metadata parse are only needed to build a login
+// request: loaded on first use, so a cold start serving valid sessions, bypass
+// headers or static assets stays light.
+let saml: { samlify: typeof Samlify; idp: Samlify.IdentityProviderInstance } | undefined;
+
+function loadSaml() {
+  if (!saml) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const samlify: typeof Samlify = require('samlify');
+    saml = { samlify, idp: samlify.IdentityProvider({ metadata: idpMetadata }) };
+  }
+  return saml;
+}
 
 const invalidRequest: CloudFrontRequestResult = {
   status: '403',
@@ -147,14 +157,6 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
       return;
     }
 
-    const signRequests = shouldSignAuthnRequests();
-    console.log('Creating SP with authnRequestsSigned:', signRequests);
-    const sp = serviceProvider({
-      metadata: spMetadata(acsHost(domain)),
-      privateKey: signRequests ? secrets.signingPrivateKey : undefined,
-      authnRequestsSigned: signRequests,
-    });
-    console.log('SP created successfully');
 
     let accessGranted = false;
     let userEmail: string | undefined;
@@ -186,6 +188,13 @@ export const handler: CloudFrontRequestHandler = (event, context, callback) => {
       const querystring = request.querystring;
       const relayStateUri = relayStateFor(domain, querystring ? `${uri}?${querystring}` : uri);
       console.log('RelayState:', relayStateUri);
+      const { samlify, idp } = loadSaml();
+      const signRequests = shouldSignAuthnRequests();
+      const sp = samlify.ServiceProvider({
+        metadata: spMetadata(acsHost(domain)),
+        privateKey: signRequests ? secrets.signingPrivateKey : undefined,
+        authnRequestsSigned: signRequests,
+      });
       sp.entitySetting.relayState = relayStateUri;
       const { context: loginRequestUrl } = sp.createLoginRequest(idp, 'redirect');
       console.log('Login request URL created:', loginRequestUrl?.substring(0, 100));

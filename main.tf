@@ -235,9 +235,9 @@ resource "aws_lambda_function" "protect" {
   description   = "Lambda@Edge - Validate SSO authentication cookie"
   role          = aws_iam_role.lambda_edge.arn
   handler       = "handlers/protect.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 5
-  memory_size   = 128
+  memory_size   = var.lambda_memory_size.protect
 
   filename         = data.archive_file.lambda_package.output_path
   source_code_hash = data.archive_file.lambda_package.output_base64sha256
@@ -255,9 +255,9 @@ resource "aws_lambda_function" "acs" {
   description   = "Lambda@Edge - Handle SAML Assertion Consumer Service"
   role          = aws_iam_role.lambda_edge.arn
   handler       = "handlers/acs.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 5
-  memory_size   = 128
+  memory_size   = var.lambda_memory_size.acs
 
   filename         = data.archive_file.lambda_package.output_path
   source_code_hash = data.archive_file.lambda_package.output_base64sha256
@@ -275,9 +275,9 @@ resource "aws_lambda_function" "metadata" {
   description   = "Lambda@Edge - Return SAML Service Provider metadata"
   role          = aws_iam_role.lambda_edge.arn
   handler       = "handlers/metadata.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 5
-  memory_size   = 128
+  memory_size   = var.lambda_memory_size.metadata
 
   filename         = data.archive_file.lambda_package.output_path
   source_code_hash = data.archive_file.lambda_package.output_base64sha256
@@ -295,9 +295,9 @@ resource "aws_lambda_function" "login" {
   description   = "Lambda@Edge - Start the SAML login flow"
   role          = aws_iam_role.lambda_edge.arn
   handler       = "handlers/login.handler"
-  runtime       = "nodejs20.x"
+  runtime       = "nodejs22.x"
   timeout       = 5
-  memory_size   = 128
+  memory_size   = var.lambda_memory_size.login
 
   filename         = data.archive_file.lambda_package.output_path
   source_code_hash = data.archive_file.lambda_package.output_base64sha256

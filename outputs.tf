@@ -8,17 +8,17 @@ output "lambda_protect_arn" {
 }
 
 output "lambda_login_arn" {
-  description = "Qualified ARN of the login Lambda@Edge function (for viewer-request on /saml/login, required with the sso-check CloudFront Function)"
+  description = "Qualified ARN of the login Lambda@Edge function (viewer-request on /saml/login, or origin-request when lambda_memory_size.login > 128; required with the sso-check CloudFront Function)"
   value       = aws_lambda_function.login.qualified_arn
 }
 
 output "lambda_acs_arn" {
-  description = "Qualified ARN of the ACS Lambda@Edge function (for viewer-request on /saml/acs)"
+  description = "Qualified ARN of the ACS Lambda@Edge function (viewer-request on /saml/acs, or origin-request when lambda_memory_size.acs > 128)"
   value       = aws_lambda_function.acs.qualified_arn
 }
 
 output "lambda_metadata_arn" {
-  description = "Qualified ARN of the metadata Lambda@Edge function (for viewer-request on /saml/metadata.xml)"
+  description = "Qualified ARN of the metadata Lambda@Edge function (viewer-request on /saml/metadata.xml, or origin-request when lambda_memory_size.metadata > 128)"
   value       = aws_lambda_function.metadata.qualified_arn
 }
 
