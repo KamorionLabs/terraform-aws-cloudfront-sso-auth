@@ -30,6 +30,7 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
     bypassHeaders: jsonConfig.bypassHeaders || '{}',
     cookieDomain: jsonConfig.cookieDomain || '',
     authHost: jsonConfig.authHost || '',
+    nameIdFormat: jsonConfig.nameIdFormat || 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
   };
 } else {
   // Fallback to environment variables (legacy)
@@ -45,6 +46,7 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
     bypassHeaders: process.env.SAML_BYPASS_HEADERS || '{}',
     cookieDomain: process.env.SAML_COOKIE_DOMAIN || '',
     authHost: process.env.SAML_AUTH_HOST || '',
+    nameIdFormat: process.env.SAML_NAME_ID_FORMAT || 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
   };
 }
 
@@ -71,6 +73,7 @@ content = content.replace(/'PLACEHOLDER_SESSION_DURATION_SECONDS'/g, JSON.string
 content = content.replace(/'PLACEHOLDER_BYPASS_HEADERS'/g, JSON.stringify(config.bypassHeaders));
 content = content.replace(/'PLACEHOLDER_COOKIE_DOMAIN'/g, JSON.stringify(config.cookieDomain));
 content = content.replace(/'PLACEHOLDER_AUTH_HOST'/g, JSON.stringify(config.authHost));
+content = content.replace(/'PLACEHOLDER_NAME_ID_FORMAT'/g, JSON.stringify(config.nameIdFormat));
 
 // Write back
 fs.writeFileSync(CONFIG_FILE, content);
