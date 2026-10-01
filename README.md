@@ -210,6 +210,19 @@ A login started on any host goes through `auth_host`, whose ACS sets the cookie 
 
 A behavior takes one viewer-request Lambda@Edge. When it already has one (a bot-protection Lambda, say), verify the session inside it instead: `session_hmac_key` (sensitive), `saml_audience` and `session_cookie_name` are enough to check the token, and a request without a valid session is redirected to `saml_login_path?relay=<path and query>`. The token format is `v1.<expiry epoch seconds>.<hex utf-8 email>.<hex HMAC-SHA256>`, the MAC covering `<audience>|v1.<expiry>.<email hex>` (see `lambda/src/shared/utils/token.ts`). Route `/saml/login`, `/saml/acs` and `/saml/metadata.xml` to the module's Lambdas on their own behaviors, as in Step 4.
 
+### Faster logins (lambda_memory_size)
+
+Lambda CPU scales with memory, and at 128 MB validating the signed SAML response in `acs` takes about 2 s. Lambda@Edge caps viewer-request functions at 128 MB, but `login`, `acs` and `metadata` sit on their own `/saml/*` behaviors with caching disabled, so they can run on **origin-request** instead, where up to 10 240 MB is allowed:
+
+```hcl
+lambda_memory_size = {
+  login = 1024
+  acs   = 1024
+}
+```
+
+and associate them with `event_type = "origin-request"` (keep `include_body = true` on `/saml/acs`). The behavior's origin request policy must forward the `Host` header and the query string (e.g. `Managed-AllViewer`): the handlers build URLs from the viewer host. `protect` gates cached behaviors before the cache, so it stays on viewer-request at 128 MB; it only loads the SAML library when it has to redirect to the IdP.
+
 ### Step 5: Complete Identity Center Configuration
 
 1. Deploy your CloudFront distribution
@@ -248,6 +261,7 @@ A behavior takes one viewer-request Lambda@Edge. When it already has one (a bot-
 | sign_authn_requests | Sign SAML AuthnRequests | bool | no |
 | cookie_domain | Session cookie domain with a leading dot; empty = host-only | string | no |
 | auth_host | Single host receiving every assertion (one ACS URL); requires cookie_domain | string | no |
+| lambda_memory_size | Memory (MB) per Lambda (`login`, `acs`, `metadata`, `protect`); above 128 MB requires origin-request association, `protect` stays at 128 | object | no |
 | name_id_format | NameID format requested from the IdP (`transient`, `persistent`, `emailAddress`, `unspecified`); must match the IdP Subject format | string | no |
 | bypass_headers | Headers (`{ name = value }`, lowercase names) letting a request through `protect` without a session; unforgeable headers only | map(string) | no |
 | name_prefix | Prefix for resource names | string | no |
