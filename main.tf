@@ -162,6 +162,15 @@ resource "aws_iam_role_policy" "lambda_edge" {
 # Lambda@Edge Functions
 # -----------------------------------------------------------------------------
 
+locals {
+  name_id_format_urn = {
+    transient    = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient"
+    persistent   = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent"
+    emailAddress = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
+    unspecified  = "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified"
+  }[var.name_id_format]
+}
+
 # Write SAML config to a JSON file for the build script
 # This ensures config is available even when building manually
 resource "local_file" "saml_config" {
@@ -177,6 +186,7 @@ resource "local_file" "saml_config" {
     bypassHeaders          = jsonencode(var.bypass_headers)
     cookieDomain           = var.cookie_domain
     authHost               = var.auth_host
+    nameIdFormat           = local.name_id_format_urn
   })
   file_permission = "0600"
 }

@@ -74,6 +74,17 @@ variable "bypass_headers" {
   }
 }
 
+variable "name_id_format" {
+  description = "NameID format requested from the IdP, and declared in the SP metadata: transient, persistent, emailAddress or unspecified. It must match the Subject format of the Identity Center application, which otherwise refuses the sign-in. The NameID value is used as the user's email (session cookie, logs), so emailAddress with Subject = $${user:email} is the usual choice."
+  type        = string
+  default     = "transient"
+
+  validation {
+    condition     = contains(["transient", "persistent", "emailAddress", "unspecified"], var.name_id_format)
+    error_message = "name_id_format must be one of transient, persistent, emailAddress, unspecified."
+  }
+}
+
 variable "cookie_domain" {
   description = "Domain of the session cookie, with its leading dot (e.g. \".preprod.example.com\"): one login then covers every protected host under it. Empty keeps a host-only cookie. Every host under the domain receives the cookie, protected or not."
   type        = string

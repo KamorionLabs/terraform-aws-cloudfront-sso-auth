@@ -42,6 +42,10 @@ export const config = {
   cookieDomain: 'PLACEHOLDER_COOKIE_DOMAIN',
   authHost: 'PLACEHOLDER_AUTH_HOST',
 
+  // NameID format requested from the IdP and declared in the SP metadata,
+  // injected at build time; must match the IdP application's Subject format.
+  nameIdFormat: 'PLACEHOLDER_NAME_ID_FORMAT',
+
   // Session cookie lifetime in seconds, injected at build time by
   // scripts/inject-config.js. Decoupled from the SAML assertion's short
   // Conditions/notOnOrAfter window so long flows (e.g. multi-step booking
@@ -84,7 +88,7 @@ export function spMetadata(domain: string): string {
                 </ds:X509Data>
             </ds:KeyInfo>
         </md:KeyDescriptor>
-        <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
+        <md:NameIDFormat>${config.nameIdFormat}</md:NameIDFormat>
         <md:AssertionConsumerService isDefault="true" index="0" Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://${domain}${config.acsPath}"/>
     </md:SPSSODescriptor>
 </md:EntityDescriptor>`;

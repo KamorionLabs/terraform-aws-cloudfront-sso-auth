@@ -248,6 +248,7 @@ A behavior takes one viewer-request Lambda@Edge. When it already has one (a bot-
 | sign_authn_requests | Sign SAML AuthnRequests | bool | no |
 | cookie_domain | Session cookie domain with a leading dot; empty = host-only | string | no |
 | auth_host | Single host receiving every assertion (one ACS URL); requires cookie_domain | string | no |
+| name_id_format | NameID format requested from the IdP (`transient`, `persistent`, `emailAddress`, `unspecified`); must match the IdP Subject format | string | no |
 | bypass_headers | Headers (`{ name = value }`, lowercase names) letting a request through `protect` without a session; unforgeable headers only | map(string) | no |
 | name_prefix | Prefix for resource names | string | no |
 | log_retention_days | CloudWatch log retention | number | no |

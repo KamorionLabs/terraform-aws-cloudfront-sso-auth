@@ -101,7 +101,7 @@ output "sp_metadata_xml" {
                 </ds:X509Data>
             </ds:KeyInfo>
         </md:KeyDescriptor>
-        <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
+        <md:NameIDFormat>${local.name_id_format_urn}</md:NameIDFormat>
 ${join("\n", [for i, domain in local.acs_domains : "        <md:AssertionConsumerService${i == 0 ? " isDefault=\"true\"" : ""} index=\"${i}\" Binding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" Location=\"https://${domain}${local.saml_acs_path}\"/>"])}
     </md:SPSSODescriptor>
 </md:EntityDescriptor>

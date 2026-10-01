@@ -45,7 +45,9 @@ output "saml_configuration_instructions" {
        - Pass it as the 'idp_metadata' variable
 
     6. Configure Attribute Mappings:
-       - Subject: $${user:subject} (format: transient)
+       - Subject: $${user:subject} (format: transient), or with
+         name_id_format = "emailAddress": $${user:email} (format: emailAddress).
+         The format must match the module's name_id_format.
 
     ============================================================
   EOT
