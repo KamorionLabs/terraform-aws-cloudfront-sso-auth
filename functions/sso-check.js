@@ -64,10 +64,11 @@ var ssoCheck = (function () {
             return redirect('/', c);
         }
 
-        // Passive sub-resources (img, font, style, media) are never sent to the
-        // HTML login portal. Documents, frames and fetch/XHR stay gated.
-        var dest = h['sec-fetch-dest'] ? h['sec-fetch-dest'].value : '';
-        if (dest ? ['document', 'iframe', 'frame', 'empty'].indexOf(dest) === -1 : ASSET.test(req.uri)) {
+        // Passive static assets (img, font, style, media) are never sent to the
+        // HTML login portal. Decided on the request line only: Sec-Fetch-Dest
+        // is client-set, trusting it would open every path. No path parameter
+        // (";": Tomcat and Jetty serve "/console;x.css" as "/console").
+        if ((req.method === 'GET' || req.method === 'HEAD') && req.uri.indexOf(';') === -1 && ASSET.test(req.uri)) {
             return undefined;
         }
 

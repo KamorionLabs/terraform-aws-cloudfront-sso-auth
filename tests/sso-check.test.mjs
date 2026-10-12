@@ -64,12 +64,12 @@ const SUBSTITUTIONS = [
 
 const { handler, deployed } = await loadFunction(SUBSTITUTIONS);
 
-function event({ uri = '/center-booking/complete', cookie, dest, query = {}, headers = {} } = {}) {
+function event({ uri = '/center-booking/complete', method = 'GET', cookie, dest, query = {}, headers = {} } = {}) {
   const h = { host: { value: 'www.preprod.example.com' }, ...headers };
   if (dest) h['sec-fetch-dest'] = { value: dest };
   const cookies = {};
   if (cookie !== undefined) cookies.sso_auth = { value: cookie };
-  return { request: { method: 'GET', uri, querystring: query, headers: h, cookies } };
+  return { request: { method, uri, querystring: query, headers: h, cookies } };
 }
 
 const now = Math.floor(Date.now() / 1000);
@@ -135,13 +135,30 @@ await test('fetch/XHR (sec-fetch-dest empty) stays gated', () => {
 });
 
 await test('passive sub-resources are served without a session', () => {
-  for (const dest of ['image', 'font', 'style', 'script']) {
+  for (const dest of ['image', 'font', 'style', 'document', 'empty']) {
     const e = event({ uri: '/logo.svg', dest });
     assert.equal(handler(e), e.request, dest);
   }
   const noHeader = event({ uri: '/fonts/a.woff2' });
   assert.equal(handler(noHeader), noHeader.request);
+  const head = event({ uri: '/css/site.css', method: 'HEAD' });
+  assert.equal(handler(head), head.request);
   assert.equal(handler(event({ uri: '/page' })).statusCode, 302);
+});
+
+await test('a client-set Sec-Fetch-Dest never opens a non-asset path', () => {
+  for (const dest of ['image', 'font', 'style', 'script', 'video']) {
+    assert.equal(handler(event({ uri: '/admin/console', dest })).statusCode, 302, dest);
+    assert.equal(handler(event({ uri: '/solr/admin/cores', dest })).statusCode, 302, dest);
+  }
+});
+
+await test('asset extensions only pass for GET/HEAD without a path parameter', () => {
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+    assert.equal(handler(event({ uri: '/upload.png', method, dest: 'image' })).statusCode, 302, method);
+  }
+  assert.equal(handler(event({ uri: '/admin/console;x.css', dest: 'style' })).statusCode, 302);
+  assert.equal(handler(event({ uri: '/backoffice;jsessionid=1/logo.png' })).statusCode, 302);
 });
 
 await test('a viewer-supplied identity header is always dropped', () => {

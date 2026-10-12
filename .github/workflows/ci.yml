@@ -121,3 +121,7 @@ jobs:
       - name: Shared session mode
         working-directory: .
         run: node tests/session.test.mjs
+
+      - name: Protect static passthrough
+        working-directory: .
+        run: node tests/protect-static.test.mjs
