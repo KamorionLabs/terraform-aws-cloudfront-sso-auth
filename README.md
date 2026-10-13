@@ -125,6 +125,8 @@ auth_host     = "sso.preprod.example.com" # the only ACS URL
 
 `auth_host` must serve the `/saml/*` behaviors. The cookie reaches every host under the domain, protected or not: pick the narrowest common parent.
 
+Two instances whose cookies can reach the same host (for example a host-only instance on `tools.example.com` next to one with `cookie_domain = ".example.com"`) must set different `cookie_name` values, or each rejects and overwrites the other's session.
+
 ### WAF-trusted requests (`bypass_headers`, Lambda@Edge only)
 
 When a WAF already decides who is trusted (an IP allowlist), it can insert a header that lets the request through `protect` without a session:
@@ -175,6 +177,7 @@ Associate them with `event_type = "origin-request"` and an origin request policy
 | `session_duration_hours` | Session lifetime, 1 to 24 | `8` |
 | `cookie_domain` | Parent domain of the session cookie (leading dot); empty: host-only | `""` |
 | `auth_host` | Single host receiving every assertion; requires `cookie_domain` | `""` |
+| `cookie_name` | Session cookie name; must differ between instances whose cookies can reach the same host | `"sso_auth"` |
 | `name_id_format` | NameID format requested: `transient`, `persistent`, `emailAddress`, `unspecified` | `"transient"` |
 | `bypass_headers` | `{ name = value }` (lowercase) letting a request through `protect` without a session | `{}` |
 | `lambda_memory_size` | Memory per function (`login`, `acs`, `metadata`, `protect`); above 128 MB needs origin-request | `{}` (128 MB) |
