@@ -1,6 +1,6 @@
 # terraform-aws-cloudfront-sso-auth
 
-Protect CloudFront distributions with AWS IAM Identity Center (SSO) over SAML, without Cognito. The session check runs in a **CloudFront Function** or a **Lambda@Edge**, the SAML flow (`/saml/login`, `/saml/acs`, `/saml/metadata.xml`) in Lambda@Edge.
+Protect CloudFront distributions with AWS IAM Identity Center (SSO) or Microsoft Entra ID over SAML, without Cognito. The session check runs in a **CloudFront Function** or a **Lambda@Edge**, the SAML flow (`/saml/login`, `/saml/acs`, `/saml/metadata.xml`) in Lambda@Edge.
 
 ## How it works
 
@@ -30,7 +30,7 @@ Default to the CloudFront Function; use `protect` when you need `bypass_headers`
 ```hcl
 module "identity_center_app" {
   source  = "KamorionLabs/cloudfront-sso-auth/aws//modules/identity-center-app"
-  version = "~> 1.3"
+  version = "~> 1.4"
 
   providers = { aws = aws.management }
 
@@ -47,7 +47,7 @@ Then, in the Identity Center console, download the application's **IAM Identity 
 ```hcl
 module "sso" {
   source  = "KamorionLabs/cloudfront-sso-auth/aws"
-  version = "~> 1.3"
+  version = "~> 1.4"
 
   providers = {
     aws           = aws
@@ -61,7 +61,7 @@ module "sso" {
 }
 ```
 
-OpenTofu does not query the Terraform registry: use `source = "git::https://github.com/KamorionLabs/terraform-aws-cloudfront-sso-auth.git?ref=v1.3.1"` instead. The Lambda package is built during the apply: Node.js and npm must be available there.
+OpenTofu does not query the Terraform registry: use `source = "git::https://github.com/KamorionLabs/terraform-aws-cloudfront-sso-auth.git?ref=v1.4.0"` instead. The Lambda package is built during the apply: Node.js and npm must be available there.
 
 ### 3. Distribution
 
@@ -112,6 +112,61 @@ lambda_function_association {
 - **ACS URL**: `https://<host>/saml/acs` (one per protected host, or the single `auth_host`, see below); **SAML audience**: `saml_audience`. `sp_metadata_xml` is the ready-to-upload SP metadata.
 - **Attribute mappings**: Subject = `${user:email}`, in the format of `name_id_format` (`transient` by default, or set `name_id_format = "emailAddress"`). A mismatch makes Identity Center answer "No access".
 
+## Microsoft Entra ID as the IdP
+
+The Lambdas speak plain SAML 2.0, so an Entra ID enterprise application works in place of Identity Center, with no SCIM sync in between. Module side, three settings change:
+
+```hcl
+saml_audience  = "https://sso.staging.example.com/saml/metadata.xml" # Entra identifier
+name_id_format = "emailAddress"
+idp_metadata   = data.http.entra_metadata.response_body
+```
+
+```hcl
+data "http" "entra_metadata" {
+  url = "https://login.microsoftonline.com/<tenant_id>/federationmetadata/2007-06/federationmetadata.xml?appid=<client_id>"
+}
+```
+
+- **`name_id_format = "emailAddress"`**: Entra honors the format of the request, and with `transient` it sends a random NameID instead of the user. The NameID is the user principal name by default.
+- **`saml_audience`** is the application's **Identifier (Entity ID)**. Entra only accepts identifiers on a verified domain of the tenant (`https://<host under a verified domain>/...`, `api://`), not a bare string such as `myapp-staging`. It is only an identifier: the host does not need to exist.
+- **Reply URL**: `https://<auth_host or host>/saml/acs`. One application can carry several identifiers and reply URLs: one module instance per pair (several environments, or instances with different cookie domains). Entra matches the request issuer (`saml_audience`) against the identifiers.
+- **Assignment**: set `app_role_assignment_required = true` on the service principal and assign groups. Entra only honors **direct** members of an assigned group (nested groups are ignored).
+- **Signing certificate**: create it with `azuread_service_principal_token_signing_certificate`, then make it the active one (`az ad sp update --id <object_id> --set preferredTokenSigningKeyThumbprint=<thumbprint>`). When it rotates, the metadata changes and the next apply rebuilds the Lambdas.
+
+```hcl
+resource "azuread_application" "sso" {
+  display_name    = "myapp-staging-sso"
+  template_id     = "8adf8e6e-67b2-4cf2-a259-e3dc5476c621" # non-gallery application
+  identifier_uris = ["https://sso.staging.example.com/saml/metadata.xml"]
+
+  web {
+    redirect_uris = ["https://sso.staging.example.com/saml/acs"]
+  }
+
+  app_role {
+    id                   = uuidv5("url", "urn:user")
+    value                = "user"
+    display_name         = "User"
+    description          = "User"
+    allowed_member_types = ["User"]
+  }
+}
+
+resource "azuread_service_principal" "sso" {
+  client_id                     = azuread_application.sso.client_id
+  use_existing                  = true
+  app_role_assignment_required  = true
+  preferred_single_sign_on_mode = "saml"
+}
+
+resource "azuread_app_role_assignment" "developers" {
+  app_role_id         = azuread_application.sso.app_role_ids["user"]
+  principal_object_id = "<group object id>"
+  resource_object_id  = azuread_service_principal.sso.object_id
+}
+```
+
 ## Options
 
 ### One login for many hosts (`cookie_domain`, `auth_host`)
@@ -124,6 +179,8 @@ auth_host     = "sso.preprod.example.com" # the only ACS URL
 ```
 
 `auth_host` must serve the `/saml/*` behaviors. The cookie reaches every host under the domain, protected or not: pick the narrowest common parent.
+
+Two instances whose cookies can reach the same host (for example a host-only instance on `tools.example.com` next to one with `cookie_domain = ".example.com"`) must set different `cookie_name` values, or each rejects and overwrites the other's session.
 
 ### WAF-trusted requests (`bypass_headers`, Lambda@Edge only)
 
@@ -175,6 +232,7 @@ Associate them with `event_type = "origin-request"` and an origin request policy
 | `session_duration_hours` | Session lifetime, 1 to 24 | `8` |
 | `cookie_domain` | Parent domain of the session cookie (leading dot); empty: host-only | `""` |
 | `auth_host` | Single host receiving every assertion; requires `cookie_domain` | `""` |
+| `cookie_name` | Session cookie name; must differ between instances whose cookies can reach the same host | `"sso_auth"` |
 | `name_id_format` | NameID format requested: `transient`, `persistent`, `emailAddress`, `unspecified` | `"transient"` |
 | `bypass_headers` | `{ name = value }` (lowercase) letting a request through `protect` without a session | `{}` |
 | `lambda_memory_size` | Memory per function (`login`, `acs`, `metadata`, `protect`); above 128 MB needs origin-request | `{}` (128 MB) |
@@ -209,6 +267,7 @@ Requirements: Terraform or OpenTofu >= 1.5; providers `aws` >= 5.0 (with an `aws
 
 ## Upgrading
 
+- **To 1.4.0**: nothing to change; `cookie_name` defaults to the previous `sso_auth`.
 - **To 1.3.1**: security fix, nothing to change. Earlier 1.x versions let any request carrying `Sec-Fetch-Dest: image` through without a session: upgrade.
 - **0.x to 1.0**: the cookie is signed instead of encrypted (everyone signs in again once); replace the `protect` association with `sso_check_function_arn` (or keep `protect`, which verifies the new cookie) and add the `/saml/login` behavior.
 

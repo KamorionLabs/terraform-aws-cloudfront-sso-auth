@@ -19,7 +19,7 @@ locals {
   saml_metadata_path = "/saml/metadata.xml"
   saml_login_path    = "/saml/login"
   saml_logout_path   = "/saml/logout"
-  cookie_name        = "sso_auth"
+  cookie_name        = var.cookie_name
 
   # ACS URLs declared in the SP metadata: the auth host alone in shared session
   # mode, one per CloudFront domain otherwise.
@@ -185,6 +185,7 @@ resource "local_file" "saml_config" {
     sessionDurationSeconds = tostring(var.session_duration_hours * 3600)
     bypassHeaders          = jsonencode(var.bypass_headers)
     cookieDomain           = var.cookie_domain
+    cookieName             = local.cookie_name
     authHost               = var.auth_host
     nameIdFormat           = local.name_id_format_urn
   })

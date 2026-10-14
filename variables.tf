@@ -117,6 +117,17 @@ variable "cookie_domain" {
   }
 }
 
+variable "cookie_name" {
+  description = "Name of the session cookie. Two instances whose cookies can reach the same host (a host-only cookie under another instance's cookie_domain, or two instances on the same parent domain) need different names: each would otherwise reject, and overwrite, the other's cookie."
+  type        = string
+  default     = "sso_auth"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_-]{1,64}$", var.cookie_name))
+    error_message = "cookie_name must be 1 to 64 letters, digits, underscores or hyphens."
+  }
+}
+
 variable "auth_host" {
   description = "Single host whose /saml/acs receives every assertion, so the Identity Center application needs one ACS URL whatever the number of protected hosts. Requires cookie_domain, and must sit under it and serve the /saml/* behaviors. Empty keeps the ACS on each requesting host (one ACS URL per host)."
   type        = string

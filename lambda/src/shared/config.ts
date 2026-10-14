@@ -34,7 +34,7 @@ export const config = {
   metadataPath: '/saml/metadata.xml',
   loginPath: '/saml/login',
   logoutPath: '/saml/logout',
-  cookieName: 'sso_auth',
+  cookieName: 'PLACEHOLDER_COOKIE_NAME',
 
   // Shared session mode, injected at build time (empty = per-host): cookie
   // domain covering every protected host (e.g. '.preprod.example.com') and the
