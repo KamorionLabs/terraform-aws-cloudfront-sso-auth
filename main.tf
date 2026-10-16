@@ -9,7 +9,9 @@ locals {
 
   # Per-instance build directory: instances of the module share path.module,
   # so a common lambda/ build would mix their configurations and race.
-  build_dir = "${path.module}/lambda/.build/${local.name_prefix}"
+  build_dir = "${path.module}/lambda/${local.build_subdir}"
+  # Relative to lambda/, the working directory of the build command
+  build_subdir = ".build/${local.name_prefix}"
 
   # Lambda function names
   lambda_protect_name  = "${local.name_prefix}-sso-protect"
@@ -228,7 +230,7 @@ resource "null_resource" "build_lambda" {
   depends_on = [local_file.saml_config]
 
   provisioner "local-exec" {
-    command     = "rm -rf '${local.build_dir}/src' '${local.build_dir}/scripts' '${local.build_dir}/dist' && cp -R src scripts package.json package-lock.json tsconfig.json '${local.build_dir}/' && cd '${local.build_dir}' && npm ci && npm run build"
+    command     = "mkdir -p '${local.build_subdir}' && rm -rf '${local.build_subdir}/src' '${local.build_subdir}/scripts' '${local.build_subdir}/dist' && cp -R src scripts package.json package-lock.json tsconfig.json '${local.build_subdir}/' && cd '${local.build_subdir}' && npm ci && npm run build"
     working_dir = "${path.module}/lambda"
   }
 }
