@@ -10,6 +10,7 @@ lambda/dist/
 lambda/node_modules/
 lambda/package.zip
 lambda/.saml-config.json
+lambda/.build/
 
 # IDE
 .idea/

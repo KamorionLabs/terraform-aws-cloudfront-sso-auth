@@ -61,7 +61,7 @@ module "sso" {
 }
 ```
 
-OpenTofu does not query the Terraform registry: use `source = "git::https://github.com/KamorionLabs/terraform-aws-cloudfront-sso-auth.git?ref=v1.4.0"` instead. The Lambda package is built during the apply: Node.js and npm must be available there.
+OpenTofu does not query the Terraform registry: use `source = "git::https://github.com/KamorionLabs/terraform-aws-cloudfront-sso-auth.git?ref=v1.4.1"` instead. The Lambda package is built during the apply: Node.js and npm must be available there.
 
 ### 3. Distribution
 
@@ -267,6 +267,7 @@ Requirements: Terraform or OpenTofu >= 1.5; providers `aws` >= 5.0 (with an `aws
 
 ## Upgrading
 
+- **To 1.4.1**: fix for several instances in one configuration (`for_each`, or several module blocks): they shared one build directory, raced (failed `npm ci`, unreadable zip) or shipped one instance's configuration in another's Lambdas. Each instance now builds in `lambda/.build/<name>`. Re-apply every instance.
 - **To 1.4.0**: nothing to change; `cookie_name` defaults to the previous `sso_auth`.
 - **To 1.3.1**: security fix, nothing to change. Earlier 1.x versions let any request carrying `Sec-Fetch-Dest: image` through without a session: upgrade.
 - **0.x to 1.0**: the cookie is signed instead of encrypted (everyone signs in again once); replace the `protect` association with `sso_check_function_arn` (or keep `protect`, which verifies the new cookie) and add the `/saml/login` behavior.

@@ -7,6 +7,10 @@
 locals {
   name_prefix = var.name_prefix != "" ? var.name_prefix : var.name
 
+  # Per-instance build directory: instances of the module share path.module,
+  # so a common lambda/ build would mix their configurations and race.
+  build_dir = "${path.module}/lambda/.build/${local.name_prefix}"
+
   # Lambda function names
   lambda_protect_name  = "${local.name_prefix}-sso-protect"
   lambda_acs_name      = "${local.name_prefix}-sso-acs"
@@ -174,7 +178,7 @@ locals {
 # Write SAML config to a JSON file for the build script
 # This ensures config is available even when building manually
 resource "local_file" "saml_config" {
-  filename = "${path.module}/lambda/.saml-config.json"
+  filename = "${local.build_dir}/.saml-config.json"
   content = jsonencode({
     audience               = var.saml_audience
     hmacKey                = random_password.hmac_key.result
@@ -195,8 +199,8 @@ resource "local_file" "saml_config" {
 # Build Lambda package
 data "archive_file" "lambda_package" {
   type        = "zip"
-  source_dir  = "${path.module}/lambda/dist"
-  output_path = "${path.module}/lambda/package.zip"
+  source_dir  = "${local.build_dir}/dist"
+  output_path = "${local.build_dir}/package.zip"
 
   depends_on = [null_resource.build_lambda]
 }
@@ -218,12 +222,13 @@ resource "null_resource" "build_lambda" {
     ]))
     secrets_version = aws_secretsmanager_secret_version.saml_config.version_id
     config_hash     = local_file.saml_config.content_md5
+    build_dir       = local.build_dir
   }
 
   depends_on = [local_file.saml_config]
 
   provisioner "local-exec" {
-    command     = "npm ci && npm run build"
+    command     = "rm -rf '${local.build_dir}/src' '${local.build_dir}/scripts' '${local.build_dir}/dist' && cp -R src scripts package.json package-lock.json tsconfig.json '${local.build_dir}/' && cd '${local.build_dir}' && npm ci && npm run build"
     working_dir = "${path.module}/lambda"
   }
 }
