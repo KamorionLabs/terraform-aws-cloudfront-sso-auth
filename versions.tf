@@ -11,6 +11,8 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.5"
     }
+    # archive and local: no longer used, kept for the upgrade from 1.4.x
+    # (destroys local_file.saml_config).
     archive = {
       source  = "hashicorp/archive"
       version = ">= 2.4"

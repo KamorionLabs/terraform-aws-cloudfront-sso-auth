@@ -61,7 +61,7 @@ module "sso" {
 }
 ```
 
-OpenTofu does not query the Terraform registry: use `source = "git::https://github.com/KamorionLabs/terraform-aws-cloudfront-sso-auth.git?ref=v1.4.2"` instead. The Lambda package is built during the apply: Node.js and npm must be available there.
+OpenTofu does not query the Terraform registry: use `source = "git::https://github.com/KamorionLabs/terraform-aws-cloudfront-sso-auth.git?ref=v1.5.0"` instead. The Lambda package is built during the apply, when its sources or configuration change: Node.js, npm and python3 must be available there.
 
 ### 3. Distribution
 
@@ -267,6 +267,7 @@ Requirements: Terraform or OpenTofu >= 1.5; providers `aws` >= 5.0 (with an `aws
 
 ## Upgrading
 
+- **To 1.5.0**: the Lambda code hash is now computed at plan time from the sources and the configuration, instead of read from the zip. A fresh checkout (CI runner) no longer plans a rebuild, a Lambda update and new Lambda@Edge associations on every run when nothing changed. The configuration reaches the build through environment variables, `.saml-config.json` is gone. The first apply publishes the Lambdas once (new hash) and destroys `local_file.saml_config`; the `archive` and `local` providers stay required for that apply. The apply now also needs `python3`, which zips the package.
 - **To 1.4.2**: 1.4.1 passed the build directory to the build command relative to the root module instead of `lambda/` ("cp: target ... is not a directory"). Use 1.4.2 instead.
 - **To 1.4.1**: fix for several instances in one configuration (`for_each`, or several module blocks): they shared one build directory, raced (failed `npm ci`, unreadable zip) or shipped one instance's configuration in another's Lambdas. Each instance now builds in `lambda/.build/<name>`. Re-apply every instance.
 - **To 1.4.0**: nothing to change; `cookie_name` defaults to the previous `sso_auth`.
