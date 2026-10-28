@@ -177,61 +177,53 @@ locals {
   }[var.name_id_format]
 }
 
-# Write SAML config to a JSON file for the build script
-# This ensures config is available even when building manually
-resource "local_file" "saml_config" {
-  filename = "${local.build_dir}/.saml-config.json"
-  content = jsonencode({
-    audience               = var.saml_audience
-    hmacKey                = random_password.hmac_key.result
-    idpMetadata            = var.idp_metadata
-    signingCert            = tls_self_signed_cert.saml_signing.cert_pem
-    signingPrivateKey      = tls_private_key.saml_signing.private_key_pem
-    signAuthnRequests      = var.sign_authn_requests ? "true" : "false"
-    sessionDurationSeconds = tostring(var.session_duration_hours * 3600)
-    bypassHeaders          = jsonencode(var.bypass_headers)
-    cookieDomain           = var.cookie_domain
-    cookieName             = local.cookie_name
-    authHost               = var.auth_host
-    nameIdFormat           = local.name_id_format_urn
-  })
-  file_permission = "0600"
-}
-
-# Build Lambda package
-data "archive_file" "lambda_package" {
-  type        = "zip"
-  source_dir  = "${local.build_dir}/dist"
-  output_path = "${local.build_dir}/package.zip"
-
-  depends_on = [null_resource.build_lambda]
-}
-
-resource "null_resource" "build_lambda" {
-  triggers = {
-    source_hash = sha256(join("", [
-      file("${path.module}/lambda/src/handlers/protect.ts"),
-      file("${path.module}/lambda/src/handlers/acs.ts"),
-      file("${path.module}/lambda/src/handlers/metadata.ts"),
-      file("${path.module}/lambda/src/handlers/login.ts"),
-      file("${path.module}/lambda/src/shared/config.ts"),
-      file("${path.module}/lambda/src/shared/utils/token.ts"),
-      file("${path.module}/lambda/src/shared/utils/cloudfront.ts"),
-      file("${path.module}/lambda/src/shared/utils/bypass.ts"),
-      file("${path.module}/lambda/src/shared/utils/session.ts"),
-      file("${path.module}/lambda/src/shared/utils/relay.ts"),
-      file("${path.module}/lambda/package.json"),
-    ]))
-    secrets_version = aws_secretsmanager_secret_version.saml_config.version_id
-    config_hash     = local_file.saml_config.content_md5
-    build_dir       = local.build_dir
+# The SAML configuration baked into the Lambda code at build time
+# (Lambda@Edge has no environment variables).
+locals {
+  saml_build_env = {
+    SAML_AUDIENCE                 = var.saml_audience
+    SAML_HMAC_KEY                 = random_password.hmac_key.result
+    SAML_IDP_METADATA             = var.idp_metadata
+    SAML_SIGNING_CERT             = tls_self_signed_cert.saml_signing.cert_pem
+    SAML_SIGNING_PRIVATE_KEY      = tls_private_key.saml_signing.private_key_pem
+    SAML_SIGN_AUTHN_REQUESTS      = var.sign_authn_requests ? "true" : "false"
+    SAML_SESSION_DURATION_SECONDS = tostring(var.session_duration_hours * 3600)
+    SAML_BYPASS_HEADERS           = jsonencode(var.bypass_headers)
+    SAML_COOKIE_DOMAIN            = var.cookie_domain
+    SAML_COOKIE_NAME              = local.cookie_name
+    SAML_AUTH_HOST                = var.auth_host
+    SAML_NAME_ID_FORMAT           = local.name_id_format_urn
   }
 
-  depends_on = [local_file.saml_config]
+  # Hash of the build inputs, known at plan time: the sources and the baked-in
+  # configuration. It stands for the package, which only exists after a build,
+  # so a fresh checkout (CI) plans no change as long as the inputs are the same.
+  lambda_source_hash = sha256(join("", [
+    for file in sort(setunion(
+      fileset("${path.module}/lambda", "src/**/*.ts"),
+      fileset("${path.module}/lambda", "scripts/*.js"),
+      ["package.json", "package-lock.json", "tsconfig.json"],
+    )) : filesha256("${path.module}/lambda/${file}")
+  ]))
+  lambda_config_hash = nonsensitive(sha256(jsonencode(local.saml_build_env)))
+  lambda_code_hash   = base64sha256("${local.lambda_source_hash}:${local.lambda_config_hash}")
+
+  lambda_package = "${local.build_dir}/package.zip"
+}
+
+# Builds and zips the package when its inputs change, before the Lambda
+# functions upload it. The configuration goes through the environment, never
+# to a file.
+resource "null_resource" "build_lambda" {
+  triggers = {
+    code_hash = local.lambda_code_hash
+    build_dir = local.build_dir
+  }
 
   provisioner "local-exec" {
-    command     = "mkdir -p '${local.build_subdir}' && rm -rf '${local.build_subdir}/src' '${local.build_subdir}/scripts' '${local.build_subdir}/dist' && cp -R src scripts package.json package-lock.json tsconfig.json '${local.build_subdir}/' && cd '${local.build_subdir}' && npm ci && npm run build"
+    command     = "mkdir -p '${local.build_subdir}' && rm -rf '${local.build_subdir}/src' '${local.build_subdir}/scripts' '${local.build_subdir}/dist' '${local.build_subdir}/.saml-config.json' '${local.build_subdir}/package.zip' && cp -R src scripts package.json package-lock.json tsconfig.json '${local.build_subdir}/' && cd '${local.build_subdir}' && npm ci && npm run build && python3 -c \"import shutil; shutil.make_archive('package', 'zip', 'dist')\""
     working_dir = "${path.module}/lambda"
+    environment = local.saml_build_env
   }
 }
 
@@ -247,12 +239,14 @@ resource "aws_lambda_function" "protect" {
   timeout       = 5
   memory_size   = var.lambda_memory_size.protect
 
-  filename         = data.archive_file.lambda_package.output_path
-  source_code_hash = data.archive_file.lambda_package.output_base64sha256
+  filename         = local.lambda_package
+  source_code_hash = local.lambda_code_hash
 
   publish = true
 
   tags = var.tags
+
+  depends_on = [null_resource.build_lambda]
 }
 
 # ACS Lambda - handles SAML assertion callback
@@ -267,12 +261,14 @@ resource "aws_lambda_function" "acs" {
   timeout       = 5
   memory_size   = var.lambda_memory_size.acs
 
-  filename         = data.archive_file.lambda_package.output_path
-  source_code_hash = data.archive_file.lambda_package.output_base64sha256
+  filename         = local.lambda_package
+  source_code_hash = local.lambda_code_hash
 
   publish = true
 
   tags = var.tags
+
+  depends_on = [null_resource.build_lambda]
 }
 
 # Metadata Lambda - returns SP metadata.xml
@@ -287,12 +283,14 @@ resource "aws_lambda_function" "metadata" {
   timeout       = 5
   memory_size   = var.lambda_memory_size.metadata
 
-  filename         = data.archive_file.lambda_package.output_path
-  source_code_hash = data.archive_file.lambda_package.output_base64sha256
+  filename         = local.lambda_package
+  source_code_hash = local.lambda_code_hash
 
   publish = true
 
   tags = var.tags
+
+  depends_on = [null_resource.build_lambda]
 }
 
 # Login Lambda - starts the SAML flow for the sso-check CloudFront Function
@@ -307,12 +305,14 @@ resource "aws_lambda_function" "login" {
   timeout       = 5
   memory_size   = var.lambda_memory_size.login
 
-  filename         = data.archive_file.lambda_package.output_path
-  source_code_hash = data.archive_file.lambda_package.output_base64sha256
+  filename         = local.lambda_package
+  source_code_hash = local.lambda_code_hash
 
   publish = true
 
   tags = var.tags
+
+  depends_on = [null_resource.build_lambda]
 }
 
 # -----------------------------------------------------------------------------

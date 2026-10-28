@@ -4,8 +4,8 @@
  * so we bake the configuration directly into the code at build time.
  *
  * Config is read from:
- * 1. .saml-config.json file (created by Terraform) - preferred
- * 2. Environment variables (legacy fallback)
+ * 1. .saml-config.json file, if present (manual builds)
+ * 2. Environment variables (set by Terraform)
  */
 
 const fs = require('fs');
@@ -14,7 +14,7 @@ const path = require('path');
 const CONFIG_FILE = path.join(__dirname, '../dist/shared/config.js');
 const SAML_CONFIG_FILE = path.join(__dirname, '../.saml-config.json');
 
-// Try to read config from JSON file first (created by Terraform)
+// Try to read config from a JSON file first (manual builds)
 let config;
 if (fs.existsSync(SAML_CONFIG_FILE)) {
   console.log('Reading config from .saml-config.json');
@@ -34,7 +34,7 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
     nameIdFormat: jsonConfig.nameIdFormat || 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
   };
 } else {
-  // Fallback to environment variables (legacy)
+  // Environment variables, set by Terraform
   console.log('Reading config from environment variables');
   config = {
     audience: process.env.SAML_AUDIENCE || 'PLACEHOLDER_AUDIENCE',
@@ -57,7 +57,7 @@ const hasPlaceholders = Object.values(config).some(v =>
   typeof v !== 'string' || v.includes('PLACEHOLDER')
 );
 if (hasPlaceholders) {
-  console.error('ERROR: Config contains placeholders. Run terraform apply to generate .saml-config.json');
+  console.error('ERROR: Config contains placeholders. Set the SAML_* environment variables or write .saml-config.json');
   process.exit(1);
 }
 

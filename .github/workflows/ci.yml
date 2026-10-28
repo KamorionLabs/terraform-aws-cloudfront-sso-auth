@@ -73,6 +73,14 @@ jobs:
         working-directory: modules/identity-center-app
         run: terraform validate
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Terraform Test (no plan change on a fresh checkout)
+        run: terraform init -backend=false && terraform test
+
   # Build Lambda to ensure it compiles
   lambda-build:
     name: Lambda Build Test
