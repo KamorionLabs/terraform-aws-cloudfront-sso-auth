@@ -14,6 +14,8 @@ const path = require('path');
 const CONFIG_FILE = path.join(__dirname, '../dist/shared/config.js');
 const SAML_CONFIG_FILE = path.join(__dirname, '../.saml-config.json');
 
+const DEFAULT_STATIC_ASSET_EXTENSIONS = 'svg|ico|png|jpg|jpeg|gif|webp|avif|bmp|woff|woff2|ttf|otf|eot|css|mp4|webm|ogg|mp3|wav';
+
 // Try to read config from a JSON file first (manual builds)
 let config;
 if (fs.existsSync(SAML_CONFIG_FILE)) {
@@ -32,6 +34,8 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
     cookieName: jsonConfig.cookieName || 'sso_auth',
     authHost: jsonConfig.authHost || '',
     nameIdFormat: jsonConfig.nameIdFormat || 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
+    // '' disables the passthrough: only an absent value takes the default
+    staticAssetExtensions: jsonConfig.staticAssetExtensions ?? DEFAULT_STATIC_ASSET_EXTENSIONS,
   };
 } else {
   // Environment variables, set by Terraform
@@ -49,6 +53,8 @@ if (fs.existsSync(SAML_CONFIG_FILE)) {
     cookieName: process.env.SAML_COOKIE_NAME || 'sso_auth',
     authHost: process.env.SAML_AUTH_HOST || '',
     nameIdFormat: process.env.SAML_NAME_ID_FORMAT || 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
+    // '' disables the passthrough: only an unset variable takes the default
+    staticAssetExtensions: process.env.SAML_STATIC_ASSET_EXTENSIONS ?? DEFAULT_STATIC_ASSET_EXTENSIONS,
   };
 }
 
@@ -77,6 +83,7 @@ content = content.replace(/'PLACEHOLDER_COOKIE_DOMAIN'/g, JSON.stringify(config.
 content = content.replace(/'PLACEHOLDER_COOKIE_NAME'/g, JSON.stringify(config.cookieName));
 content = content.replace(/'PLACEHOLDER_AUTH_HOST'/g, JSON.stringify(config.authHost));
 content = content.replace(/'PLACEHOLDER_NAME_ID_FORMAT'/g, JSON.stringify(config.nameIdFormat));
+content = content.replace(/'PLACEHOLDER_STATIC_ASSET_EXTENSIONS'/g, JSON.stringify(config.staticAssetExtensions));
 
 // Write back
 fs.writeFileSync(CONFIG_FILE, content);

@@ -31,11 +31,14 @@ locals {
   # mode, one per CloudFront domain otherwise.
   acs_domains = var.auth_host != "" ? [var.auth_host] : var.cloudfront_domains
 
+  # Extensions served without a session, as a regex alternation ("" = none).
+  static_asset_extensions = join("|", var.static_asset_extensions)
+
   # The sso-check library, full-line comments blanked and indentation stripped
   # (lines kept, so deployed line numbers match the source) to stay far under
   # the 10 KB CloudFront Functions limit once composed with another function.
   # Every sentinel is replaced together with its fail-closed fallback.
-  sso_check_library_js = replace(replace(replace(replace(replace(replace(
+  sso_check_library_js = replace(replace(replace(replace(replace(replace(replace(
     join("\n", [
       for line in split("\n", file("${path.module}/functions/sso-check.js")) :
       can(regex("^\\s*//", line)) ? "" : trimspace(line)
@@ -45,7 +48,8 @@ locals {
     "/*__SSO_COOKIE_NAME__*/'sso_auth'", jsonencode(local.cookie_name)),
     "/*__SSO_LOGIN_PATH__*/'/saml/login'", jsonencode(local.saml_login_path)),
     "/*__SSO_LOGOUT_PATH__*/'/saml/logout'", jsonencode(local.saml_logout_path)),
-    "/*__SSO_COOKIE_DOMAIN__*/''", jsonencode(var.cookie_domain)
+    "/*__SSO_COOKIE_DOMAIN__*/''", jsonencode(var.cookie_domain)),
+    "/*__SSO_ASSET_EXTENSIONS__*/'svg|ico|png|jpg|jpeg|gif|webp|avif|bmp|woff|woff2|ttf|otf|eot|css|mp4|webm|ogg|mp3|wav'", jsonencode(local.static_asset_extensions)
   )
 
   sso_check_import_js = "import crypto from 'crypto';"
@@ -193,6 +197,7 @@ locals {
     SAML_COOKIE_NAME              = local.cookie_name
     SAML_AUTH_HOST                = var.auth_host
     SAML_NAME_ID_FORMAT           = local.name_id_format_urn
+    SAML_STATIC_ASSET_EXTENSIONS  = local.static_asset_extensions
   }
 
   # Hash of the build inputs, known at plan time: the sources and the baked-in
