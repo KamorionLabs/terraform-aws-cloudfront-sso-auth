@@ -42,6 +42,10 @@ export const config = {
   cookieDomain: 'PLACEHOLDER_COOKIE_DOMAIN',
   authHost: 'PLACEHOLDER_AUTH_HOST',
 
+  // Extensions served without a session, as a regex alternation injected at
+  // build time ('' = none).
+  staticAssetExtensions: 'PLACEHOLDER_STATIC_ASSET_EXTENSIONS',
+
   // NameID format requested from the IdP and declared in the SP metadata,
   // injected at build time; must match the IdP application's Subject format.
   nameIdFormat: 'PLACEHOLDER_NAME_ID_FORMAT',
@@ -107,3 +111,10 @@ function parseBypassHeaders(raw: string): Record<string, string> {
 }
 
 export const bypassHeaders = parseBypassHeaders(secrets.bypassHeaders);
+
+// Fails closed: an empty or malformed list lets no path through.
+export function parseStaticAssetPattern(raw: string): RegExp | null {
+  return /^[a-z0-9]+(?:\|[a-z0-9]+)*$/.test(raw) ? new RegExp(`\\.(?:${raw})$`, 'i') : null;
+}
+
+export const staticAssetPattern = parseStaticAssetPattern(config.staticAssetExtensions);

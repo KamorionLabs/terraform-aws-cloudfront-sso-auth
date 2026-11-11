@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const { isStaticSubresource } = require(path.join(root, 'lambda/dist/handlers/protect.js'));
+const { parseStaticAssetPattern } = require(path.join(root, 'lambda/dist/shared/config.js'));
 
 const cases = [
   ['GET', '/logo.png', true],
@@ -33,5 +34,18 @@ for (const [method, uri, expected] of cases) {
   assert.equal(isStaticSubresource(method, uri), expected, `${method} ${uri}`);
 }
 
-console.log(`${cases.length} checks passed`);
+// static_asset_extensions: an empty or malformed list gates every path.
+const configured = [
+  ['', '/logo.png', false],
+  ['css|.*', '/site.css', false],
+  ['woff2|ttf', '/fonts/a.WOFF2', true],
+  ['woff2|ttf', '/index.php/x.css', false],
+  ['woff2|ttf', '/admin/console;x.ttf', false],
+];
+
+for (const [extensions, uri, expected] of configured) {
+  assert.equal(isStaticSubresource('GET', uri, parseStaticAssetPattern(extensions)), expected, `"${extensions}" ${uri}`);
+}
+
+console.log(`${cases.length + configured.length} checks passed`);
 process.exit(0);

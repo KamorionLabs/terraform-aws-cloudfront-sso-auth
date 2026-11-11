@@ -74,6 +74,17 @@ variable "bypass_headers" {
   }
 }
 
+variable "static_asset_extensions" {
+  description = "File extensions served without an SSO session on GET/HEAD, so an expired cookie never breaks an image, font, stylesheet or media request with a redirect to the login portal. Any path ending with one of them is public: set [] when the origin can answer such a path with protected content (PHP PATH_INFO such as /index.php/x.css, Spring or Rails format suffixes, protected downloads), or keep only the extensions the origin serves as plain files."
+  type        = list(string)
+  default     = ["svg", "ico", "png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "woff", "woff2", "ttf", "otf", "eot", "css", "mp4", "webm", "ogg", "mp3", "wav"]
+
+  validation {
+    condition     = alltrue([for ext in var.static_asset_extensions : can(regex("^[a-z0-9]+$", ext))])
+    error_message = "static_asset_extensions entries must be lowercase letters and digits only, without the leading dot (matching is case-insensitive)."
+  }
+}
+
 variable "lambda_memory_size" {
   description = "Memory (MB) of each Lambda@Edge function. CPU scales with memory: SAML response validation in acs is the slowest step at 128 MB. Lambda@Edge caps viewer-request functions at 128 MB: above that, associate login, acs and metadata on origin-request (their /saml/* behaviors have caching disabled, so every request reaches them) with an origin request policy that forwards the Host header and the query string (e.g. Managed-AllViewer). protect gates cached behaviors before the cache and stays on viewer-request, hence 128 MB."
   type = object({

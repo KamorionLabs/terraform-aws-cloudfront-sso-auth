@@ -5,7 +5,7 @@ import type {
 } from 'aws-lambda';
 
 import type * as Samlify from 'samlify';
-import { spMetadata, idpMetadata, config, secrets, shouldSignAuthnRequests, bypassHeaders } from '../shared/config';
+import { spMetadata, idpMetadata, config, secrets, shouldSignAuthnRequests, bypassHeaders, staticAssetPattern } from '../shared/config';
 import { verifyToken } from '../shared/utils/token';
 import { getDomain, readCookieValues } from '../shared/utils/cloudfront';
 import { acsHost, clearedCookie, relayStateFor } from '../shared/utils/session';
@@ -40,11 +40,6 @@ const invalidRequest: CloudFrontRequestResult = {
   },
 };
 
-// File extensions of passive static assets. Intentionally excludes
-// .js/.json/.txt/.xml/.html so that data and markup always stay gated.
-const STATIC_ASSET_EXTENSIONS =
-  /\.(?:svg|ico|png|jpe?g|gif|webp|avif|bmp|woff2?|ttf|otf|eot|css|mp4|webm|ogg|mp3|wav)$/i;
-
 /**
  * Whether a request is a static, non-navigational sub-resource that must be
  * served without an SSO redirect.
@@ -59,15 +54,22 @@ const STATIC_ASSET_EXTENSIONS =
  * "Sec-Fetch-Dest: image" on any path. A request passes only as a GET or HEAD
  * whose path ends with a static asset extension and carries no path parameter
  * (";": Tomcat and Jetty serve "/console;x.css" as "/console").
+ *
+ * The extensions come from the static_asset_extensions variable; the default
+ * leaves out .js/.json/.txt/.xml/.html so data and markup stay gated. An empty
+ * list (null pattern) gates every path.
  */
-export function isStaticSubresource(method: string, uri: string): boolean {
+export function isStaticSubresource(method: string, uri: string, pattern: RegExp | null = staticAssetPattern): boolean {
+  if (!pattern) {
+    return false;
+  }
   if (method !== 'GET' && method !== 'HEAD') {
     return false;
   }
   if (uri.includes(';')) {
     return false;
   }
-  return STATIC_ASSET_EXTENSIONS.test(uri);
+  return pattern.test(uri);
 }
 
 /**

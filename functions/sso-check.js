@@ -20,7 +20,9 @@ var ssoCheck = (function () {
     var LOGOUT = /*__SSO_LOGOUT_PATH__*/'/saml/logout';
     var DOMAIN = /*__SSO_COOKIE_DOMAIN__*/'';
     var USER = 'x-sso-user-email';
-    var ASSET = /\.(?:svg|ico|png|jpe?g|gif|webp|avif|bmp|woff2?|ttf|otf|eot|css|mp4|webm|ogg|mp3|wav)$/i;
+    // Fails closed: an empty or malformed list matches no path.
+    var EXT = /*__SSO_ASSET_EXTENSIONS__*/'svg|ico|png|jpg|jpeg|gif|webp|avif|bmp|woff|woff2|ttf|otf|eot|css|mp4|webm|ogg|mp3|wav';
+    var ASSET = /^\w+(\|\w+)*$/.test(EXT) ? RegExp('\\.(?:' + EXT + ')$', 'i') : /^$/;
     var HEX = /^(?:[0-9a-f]{2})*$/;
 
     function redirect(location, cookies) {
@@ -67,7 +69,8 @@ var ssoCheck = (function () {
         // Passive static assets (img, font, style, media) are never sent to the
         // HTML login portal. Decided on the request line only: Sec-Fetch-Dest
         // is client-set, trusting it would open every path. No path parameter
-        // (";": Tomcat and Jetty serve "/console;x.css" as "/console").
+        // (";": Tomcat and Jetty serve "/console;x.css" as "/console"). An empty
+        // extension list gates every path.
         if ((req.method === 'GET' || req.method === 'HEAD') && req.uri.indexOf(';') === -1 && ASSET.test(req.uri)) {
             return undefined;
         }

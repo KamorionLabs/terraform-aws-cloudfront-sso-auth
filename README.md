@@ -8,7 +8,7 @@ Protect CloudFront distributions with AWS IAM Identity Center (SSO) or Microsoft
 2. Without a valid session, the user is sent to Identity Center: through `/saml/login` (CloudFront Function) or directly (Lambda@Edge `protect`).
 3. Identity Center POSTs the SAML assertion to `/saml/acs`, which validates it, sets the session cookie and sends the user back to the original URL.
 
-Passive static assets (`GET`/`HEAD` on an image, font, stylesheet or media extension) are served without a session, so an expired cookie never breaks a page with a redirect to the login portal. Scripts, data and markup always stay gated.
+Passive static assets (`GET`/`HEAD` on an image, font, stylesheet or media extension) are served without a session, so an expired cookie never breaks a page with a redirect to the login portal. Scripts, data and markup stay gated by default. Any path ending with one of these extensions is public: narrow or empty `static_asset_extensions` when the origin can answer such a path with protected content.
 
 ## Choosing the session check
 
@@ -235,6 +235,7 @@ Associate them with `event_type = "origin-request"` and an origin request policy
 | `cookie_name` | Session cookie name; must differ between instances whose cookies can reach the same host | `"sso_auth"` |
 | `name_id_format` | NameID format requested: `transient`, `persistent`, `emailAddress`, `unspecified` | `"transient"` |
 | `bypass_headers` | `{ name = value }` (lowercase) letting a request through `protect` without a session | `{}` |
+| `static_asset_extensions` | Extensions served without a session on `GET`/`HEAD`; `[]` gates every path | images, fonts, `css`, media |
 | `lambda_memory_size` | Memory per function (`login`, `acs`, `metadata`, `protect`); above 128 MB needs origin-request | `{}` (128 MB) |
 | `sign_authn_requests` | Sign the SAML AuthnRequests | `false` |
 | `name_prefix` | Prefix of the resource names | `""` (`name`) |
@@ -263,6 +264,7 @@ Requirements: Terraform or OpenTofu >= 1.5; providers `aws` >= 5.0 (with an `aws
 - The HMAC key is baked into the Lambda@Edge package and the CloudFront Function code (neither can read Secrets Manager at runtime): anyone allowed to read those functions can read it. Rotate it with `apply -replace=module.<name>.random_password.hmac_key` (everyone signs in again).
 - `x-sso-user-email`, forwarded to the origin for authenticated requests, is always removed from the viewer request first.
 - The static asset passthrough depends on the request line only (`GET`/`HEAD`, asset extension, no `;` path parameter), never on `Sec-Fetch-Dest` or any other client header.
+- That passthrough trusts the origin to serve those paths as plain files. An origin that routes on a prefix can return protected content under an asset suffix (PHP `PATH_INFO`: `/index.php/x.css`; Spring or Rails format suffixes; protected downloads such as `/private/report.png`). Check with `curl -i https://<host>/<protected path>/x.css` without a cookie, and set `static_asset_extensions = []` or a shorter list if anything but a 404 comes back.
 - `/saml/login` and the ACS only follow same-site relay targets (no open redirect).
 
 ## Upgrading

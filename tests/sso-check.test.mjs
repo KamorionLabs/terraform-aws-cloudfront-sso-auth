@@ -161,6 +161,24 @@ await test('asset extensions only pass for GET/HEAD without a path parameter', (
   assert.equal(handler(event({ uri: '/backoffice;jsessionid=1/logo.png' })).statusCode, 302);
 });
 
+await test('static_asset_extensions narrows or disables the passthrough', async () => {
+  const sentinel = "/*__SSO_ASSET_EXTENSIONS__*/'svg|ico|png|jpg|jpeg|gif|webp|avif|bmp|woff|woff2|ttf|otf|eot|css|mp4|webm|ogg|mp3|wav'";
+  const none = (await loadFunction([...SUBSTITUTIONS, [sentinel, '']])).handler;
+  assert.equal(none(event({ uri: '/logo.svg', dest: 'image' })).statusCode, 302);
+  assert.equal(none(event({ uri: '/css/site.css', method: 'HEAD' })).statusCode, 302);
+  const withSession = event({ uri: '/logo.svg', cookie: valid });
+  assert.equal(none(withSession), withSession.request);
+
+  const fonts = (await loadFunction([...SUBSTITUTIONS, [sentinel, 'woff2|ttf']])).handler;
+  const font = event({ uri: '/fonts/a.WOFF2' });
+  assert.equal(fonts(font), font.request);
+  assert.equal(fonts(event({ uri: '/index.php/x.css' })).statusCode, 302);
+
+  // A malformed list fails closed instead of widening the pattern.
+  const broken = (await loadFunction([...SUBSTITUTIONS, [sentinel, 'css|.*']])).handler;
+  assert.equal(broken(event({ uri: '/site.css' })).statusCode, 302);
+});
+
 await test('a viewer-supplied identity header is always dropped', () => {
   const e = event({ uri: '/logo.svg', dest: 'image', headers: { 'x-sso-user-email': { value: 'spoof@example.com' } } });
   handler(e);
